@@ -39,13 +39,14 @@ tar --exclude='.git' \
     --exclude='*.pyc' \
     --exclude='venv' \
     --exclude='.env' \
+    --exclude='prisoners-dilemma-bot.tar.gz' \
     -czf prisoners-dilemma-bot.tar.gz .
 
 echo "✅ Архив создан"
 
 # Копируем файлы на сервер
 echo "📤 Копируем файлы на сервер..."
-scp prisoners_dilemma-bot.tar.gz $SERVER:/tmp/
+scp prisoners-dilemma-bot.tar.gz $SERVER:/tmp/
 scp .env $SERVER:/tmp/
 
 echo "✅ Файлы скопированы"

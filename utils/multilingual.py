@@ -4,7 +4,6 @@
 import logging
 from typing import Dict, Optional
 from langdetect import detect, LangDetectException
-from googletrans import Translator
 
 from config.settings import Config
 
@@ -14,7 +13,6 @@ class MultilingualManager:
     """Менеджер для работы с многоязычностью"""
     
     def __init__(self):
-        self.translator = Translator()
         self.supported_languages = Config.SUPPORTED_LANGUAGES
         self.default_language = 'en'
     
@@ -50,7 +48,7 @@ class MultilingualManager:
     
     def translate_text(self, text: str, target_language: str, source_language: str = None) -> str:
         """
-        Переводит текст на целевой язык
+        Переводит текст на целевой язык (заглушка - переводы отключены)
         
         Args:
             text: Текст для перевода
@@ -58,26 +56,12 @@ class MultilingualManager:
             source_language: Исходный язык (опционально)
             
         Returns:
-            Переведенный текст
+            Исходный текст (переводы отключены)
         """
-        try:
-            if not text or target_language not in self.supported_languages:
-                return text
-            
-            # Если исходный язык не указан, пытаемся определить
-            if not source_language:
-                source_language = self.detect_language(text)
-            
-            # Если языки одинаковые, возвращаем исходный текст
-            if source_language == target_language:
-                return text
-            
-            result = self.translator.translate(text, dest=target_language, src=source_language)
-            return result.text
-            
-        except Exception as e:
-            logger.error(f"Ошибка перевода: {e}")
-            return text
+        # Временно отключаем переводы для упрощения развертывания
+        # В будущем можно добавить Google Translate API или другой сервис
+        logger.info(f"Перевод отключен. Возвращаем исходный текст: {text[:50]}...")
+        return text
     
     def get_language_name(self, language_code: str) -> str:
         """
