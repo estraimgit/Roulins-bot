@@ -23,4 +23,4 @@ chmod 755 /app/data /app/logs
 
 # Запускаем бота
 echo "Starting bot with Python..."
-exec python main.py
+exec python main_llm.py

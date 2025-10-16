@@ -121,7 +121,10 @@ class LLMPrisonersDilemmaBot:
         
         data = query.data
         
-        if data.startswith('survey_'):
+        if data.startswith('lang_'):
+            # Обрабатываем выбор языка
+            await self.experiment_handler.handle_language_selection(update, context)
+        elif data.startswith('survey_'):
             # Обрабатываем ответы на опрос
             await self.survey_handler.handle_survey_response(update, context)
         else:

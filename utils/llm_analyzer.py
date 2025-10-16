@@ -17,8 +17,8 @@ class LLMAnalyzer:
     
     def __init__(self):
         self.api_key = Config.CLOUD_RU_API_KEY
-        self.base_url = "https://api.cloud.ru/v1"
-        self.model = "gpt-3.5-turbo"  # Можно изменить на другую модель
+        self.base_url = "https://foundation-models.api.cloud.ru/v1"
+        self.model = "GigaChat/GigaChat-2-Max"  # Используем GigaChat модель
         
     def analyze_message(self, message: str, context: Dict = None) -> Dict:
         """
@@ -148,14 +148,30 @@ class LLMAnalyzer:
             return self._basic_analysis("")
     
     def _basic_analysis(self, message: str) -> Dict:
-        """Базовый анализ без LLM"""
+        """Базовый анализ без LLM с разнообразными ответами"""
+        import random
+        
+        # Разнообразные fallback ответы
+        fallback_responses = [
+            "Интересно, расскажите больше о ваших мыслях.",
+            "Что еще вы думаете об этой ситуации?",
+            "Как бы вы поступили в реальной жизни?",
+            "Что влияет на ваше решение?",
+            "Поделитесь своими размышлениями.",
+            "Что для вас важнее - честность или выгода?",
+            "Как вы оцениваете риски?",
+            "Что бы вы посоветовали другу?",
+            "Расскажите о ваших принципах.",
+            "Что сложнее всего в этом выборе?"
+        ]
+        
         return {
             "emotion": "neutral",
             "intent": "question",
             "confidence": "medium",
             "persuasion_resistance": "medium",
             "key_themes": ["general"],
-            "suggested_response": "Понял, продолжаем эксперимент",
+            "suggested_response": random.choice(fallback_responses),
             "nudging_effectiveness": "medium",
             "risk_of_dropout": "low",
             "analysis_method": "basic"
@@ -254,15 +270,41 @@ class LLMAnalyzer:
 4. Естественно звучит на русском языке
 5. Не превышает 2-3 предложения
 
-Ответ должен быть только текстом, без дополнительных комментариев.
+Ответ должен быть в формате JSON:
+{
+    "response": "Ваш ответ здесь"
+}
 """
             
             response = self._call_cloud_ru_api(prompt)
             
             if response and isinstance(response, str):
-                # Очищаем ответ от лишних символов
-                clean_response = response.strip().strip('"').strip("'")
-                return clean_response
+                # Пытаемся извлечь JSON из ответа
+                try:
+                    # Ищем JSON в ответе
+                    start_idx = response.find('{')
+                    end_idx = response.rfind('}') + 1
+                    
+                    if start_idx != -1 and end_idx != -1:
+                        json_str = response[start_idx:end_idx]
+                        json_data = json.loads(json_str)
+                        
+                        # Извлекаем ответ из JSON
+                        if 'response' in json_data:
+                            return json_data['response']
+                        elif 'answer' in json_data:
+                            return json_data['answer']
+                        elif 'text' in json_data:
+                            return json_data['text']
+                    
+                    # Если JSON не найден, используем весь ответ
+                    clean_response = response.strip().strip('"').strip("'")
+                    return clean_response
+                    
+                except json.JSONDecodeError:
+                    # Если не удалось распарсить JSON, используем весь ответ
+                    clean_response = response.strip().strip('"').strip("'")
+                    return clean_response
             else:
                 return self._get_default_response(analysis, context)
                 
@@ -272,21 +314,25 @@ class LLMAnalyzer:
     
     def _get_default_response(self, analysis: Dict, context: Dict) -> str:
         """Возвращает стандартный ответ на основе анализа"""
-        emotion = analysis.get('emotion', 'neutral')
-        intent = analysis.get('intent', 'question')
-        group = context.get('group', 'unknown')
+        # Используем suggested_response из анализа, если он есть
+        if 'suggested_response' in analysis:
+            return analysis['suggested_response']
         
-        # Базовые ответы в зависимости от группы и эмоции
-        if group == 'confess':
-            if emotion in ['anxious', 'frustrated']:
-                return "Понимаю ваши сомнения. Помните, что честность - это важное качество, которое поможет вам в долгосрочной перспективе."
-            else:
-                return "Спасибо за ваше сообщение. Продолжайте размышлять о важности честности в ваших решениях."
-        else:  # silent group
-            if emotion in ['anxious', 'frustrated']:
-                return "Ваши размышления понятны. Иногда молчание может быть мудрым выбором."
-            else:
-                return "Спасибо за ваше сообщение. Продолжайте обдумывать свои решения."
+        # Fallback к разнообразным ответам
+        import random
+        fallback_responses = [
+            "Интересно, расскажите больше о ваших мыслях.",
+            "Что еще вы думаете об этой ситуации?",
+            "Как бы вы поступили в реальной жизни?",
+            "Что влияет на ваше решение?",
+            "Поделитесь своими размышлениями.",
+            "Что для вас важнее - честность или выгода?",
+            "Как вы оцениваете риски?",
+            "Что бы вы посоветовали другу?",
+            "Расскажите о ваших принципах.",
+            "Что сложнее всего в этом выборе?"
+        ]
+        return random.choice(fallback_responses)
     
     def log_analysis(self, user_id: int, message: str, analysis: Dict, response: str):
         """Логирует анализ для дальнейшего изучения"""

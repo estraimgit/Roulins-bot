@@ -18,11 +18,22 @@ class AdminHandler:
     
     def __init__(self):
         self.db = DatabaseManager()
-        self.admin_user_ids = [int(uid.strip()) for uid in Config.ADMIN_USER_IDS if uid.strip()]
+        self.admin_user_ids = []
+        for uid in Config.ADMIN_USER_IDS:
+            if uid.strip():
+                try:
+                    self.admin_user_ids.append(int(uid.strip()))
+                except ValueError:
+                    logger.warning(f"Неверный формат admin user ID: {uid}")
         
     def is_admin(self, user_id: int) -> bool:
         """Проверяет, является ли пользователь админом"""
-        return user_id in self.admin_user_ids
+        logger.info(f"Проверка админских прав для user_id: {user_id}")
+        logger.info(f"Список админов: {self.admin_user_ids}")
+        logger.info(f"Config.ADMIN_USER_IDS: {Config.ADMIN_USER_IDS}")
+        result = user_id in self.admin_user_ids
+        logger.info(f"Результат проверки: {result}")
+        return result
     
     async def handle_admin_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик админских команд"""
@@ -288,10 +299,11 @@ class AdminHandler:
                 }
             
             # Проверяем, участвовал ли пользователь уже
-            with self.db.get_connection() as conn:
+            import sqlite3
+            with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "SELECT COUNT(*) FROM participants WHERE user_id = ?",
+                    "SELECT COUNT(*) FROM participants WHERE telegram_user_id = ?",
                     (user_id,)
                 )
                 participation_count = cursor.fetchone()[0]

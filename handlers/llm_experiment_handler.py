@@ -14,7 +14,7 @@ from utils.multilingual import MultilingualManager
 from utils.llm_analyzer import LLMAnalyzer
 from handlers.survey_handler import SurveyHandler
 from handlers.admin_handler import AdminHandler
-from config.nudging_texts import NudgingTexts
+from config.nudging_texts import CONFESS_NUDGING_TEXTS, SILENT_NUDGING_TEXTS
 from config.settings import Config
 
 logger = logging.getLogger(__name__)
@@ -29,14 +29,16 @@ class LLMExperimentHandler:
         self.llm_analyzer = LLMAnalyzer()
         self.survey_handler = SurveyHandler(self.db)
         self.admin_handler = AdminHandler()
-        self.nudging_texts = NudgingTexts()
+        # Используем прямые импорты текстов
+        self.confess_texts = CONFESS_NUDGING_TEXTS
+        self.silent_texts = SILENT_NUDGING_TEXTS
         
         # Активные сессии
         self.active_sessions = {}
         self.conversation_history = {}
         
     async def start_experiment(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Начинает эксперимент с LLM анализом"""
+        """Начинает эксперимент с выбором языка"""
         user_id = update.effective_user.id
         username = update.effective_user.username or "unknown"
         
@@ -55,10 +57,48 @@ class LLMExperimentHandler:
                     await update.message.reply_text(eligibility['message'])
                 return
             
-            # Определяем язык
-            user_message = update.message.text or ""
-            language = self.multilingual.detect_language(user_message)
+            # Показываем выбор языка
+            await self._show_language_selection(update, context)
             
+        except Exception as e:
+            logger.error(f"Ошибка при запуске эксперимента: {e}")
+            await update.message.reply_text(
+                "Произошла ошибка при запуске эксперимента. Попробуйте позже."
+            )
+    
+    async def _show_language_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показывает выбор языка"""
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        
+        keyboard = [
+            [InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru")],
+            [InlineKeyboardButton("🇺🇸 English", callback_data="lang_en")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message_text = (
+            "🌍 **Выберите язык для эксперимента:**\n\n"
+            "🌍 **Choose language for the experiment:**\n\n"
+            "🇷🇺 Русский - для русскоязычных участников\n"
+            "🇺🇸 English - for English-speaking participants"
+        )
+        
+        await update.message.reply_text(
+            message_text, 
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    
+    async def handle_language_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обрабатывает выбор языка"""
+        query = update.callback_query
+        await query.answer()
+        
+        user_id = query.from_user.id
+        username = query.from_user.username or "unknown"
+        language = query.data.split('_')[1]  # 'ru' или 'en'
+        
+        try:
             # Генерируем ID участника и назначаем группу
             participant_id = self.randomizer.generate_participant_id(user_id)
             group = self.randomizer.assign_group(participant_id)
@@ -80,49 +120,46 @@ class LLMExperimentHandler:
             self.active_sessions[user_id] = session_data
             self.conversation_history[user_id] = []
             
-            # Записываем в базу данных
-            await self.db.create_participant(
-                participant_id=participant_id,
-                user_id=user_id,
-                username=username,
-                group=group,
-                language=language,
-                start_time=session_data['start_time']
-            )
+            # Записываем в базу данных (или обновляем существующего)
+            try:
+                success = self.db.create_participant(
+                    participant_id=participant_id,
+                    telegram_user_id=user_id,
+                    language=language,
+                    experiment_group=group
+                )
+                
+                # Если участник уже существует, это не ошибка - продолжаем
+                if not success:
+                    logger.info(f"Участник {participant_id} уже существует, продолжаем эксперимент")
+                    
+            except Exception as e:
+                logger.error(f"Ошибка при создании участника: {e}")
+                await query.edit_message_text(
+                    "Произошла ошибка при регистрации. Пожалуйста, попробуйте еще раз."
+                )
+                return
             
             # Отправляем приветственное сообщение
             welcome_text = self._get_welcome_message(language, group)
-            await update.message.reply_text(welcome_text)
+            await query.edit_message_text(welcome_text)
             
-            # Анализируем приветственное сообщение с помощью LLM
-            if self.llm_analyzer.api_key:
-                analysis = self.llm_analyzer.analyze_message(
-                    user_message, 
-                    {
-                        'group': group,
-                        'time_elapsed': 0,
-                        'message_count': 0,
-                        'language': language
-                    }
+            # Запускаем таймер завершения эксперимента (если JobQueue доступен)
+            if hasattr(context, 'job_queue') and context.job_queue:
+                context.job_queue.run_once(
+                    self._end_experiment, 
+                    300,  # 5 минут
+                    data={'user_id': user_id}
                 )
-                
-                # Логируем анализ
-                self.llm_analyzer.log_analysis(user_id, user_message, analysis, welcome_text)
-                
-                # Сохраняем анализ в базу данных
-                await self.db.log_llm_analysis(
-                    participant_id=participant_id,
-                    user_message=user_message,
-                    analysis=analysis,
-                    bot_response=welcome_text
-                )
+            else:
+                logger.warning("JobQueue не доступен, таймер завершения эксперимента не установлен")
             
-            logger.info(f"Эксперимент начат для пользователя {user_id}, группа: {group}")
+            logger.info(f"Эксперимент начат для пользователя {user_id}, группа: {group}, язык: {language}")
             
         except Exception as e:
-            logger.error(f"Ошибка при запуске эксперимента: {e}")
-            await update.message.reply_text(
-                "Произошла ошибка при запуске эксперимента. Попробуйте позже."
+            logger.error(f"Ошибка при выборе языка: {e}")
+            await query.edit_message_text(
+                "Произошла ошибка при выборе языка. Попробуйте еще раз."
             )
     
     async def handle_user_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -171,11 +208,13 @@ class LLMExperimentHandler:
                     user_message, analysis, context_for_analysis
                 )
             else:
-                # Используем стандартные ответы
-                bot_response = self._get_standard_response(
-                    session_data['group'], 
-                    session_data['language'],
-                    analysis
+                # Используем разнообразные ответы из анализа
+                bot_response = analysis.get('suggested_response', 
+                    self._get_standard_response(
+                        session_data['group'], 
+                        session_data['language'],
+                        analysis
+                    )
                 )
             
             # Отправляем ответ
