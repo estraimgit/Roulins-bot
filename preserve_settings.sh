@@ -10,13 +10,14 @@ echo "🔒 Сохраняем важные настройки..."
 
 # Сохраняем текущие настройки
 ssh $SERVER "cd $REMOTE_APP_DIR && cat > settings_backup.env << 'EOF'
-# Важные настройки - НЕ УДАЛЯТЬ!
+# Важные настройки - НЕ УДАЛЯТЬ И НЕ ОБНОВЛЯТЬ!
 ADMIN_USER_IDS=177657170
 TESTING_MODE=true
 ALLOW_MULTIPLE_SESSIONS=true
 LLM_ENABLED=true
 LLM_ANALYSIS_ENABLED=true
 LLM_MODEL=GigaChat/GigaChat-2-Max
+# API ключ cloud.ru - КРИТИЧЕСКИ ВАЖНО! НИКОГДА НЕ СТИРАТЬ!
 CLOUD_RU_API_KEY=ZTE0NjlhMzktYTFkOS00OGZjLWI3OGYtNzI0YjY4Mjc4MGRj.738e2f53ef86e0bec40be8e5262b9840
 EOF"
 
