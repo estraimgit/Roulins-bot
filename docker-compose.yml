@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  prisoners-dilemma-bot:
+    build: .
+    container_name: prisoners-dilemma-bot
+    restart: unless-stopped
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - WEBHOOK_URL=${WEBHOOK_URL:-}
+      - WEBHOOK_PORT=${WEBHOOK_PORT:-8443}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///app/data/experiment.db}
+      - EXPERIMENT_DURATION_MINUTES=${EXPERIMENT_DURATION_MINUTES:-5}
+      - TOTAL_PARTICIPANTS=${TOTAL_PARTICIPANTS:-100}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FILE=${LOG_FILE:-/app/logs/bot.log}
+      - GOOGLE_TRANSLATE_API_KEY=${GOOGLE_TRANSLATE_API_KEY:-}
+      - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    ports:
+      - "8443:8443"
+    networks:
+      - bot-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8443/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  bot-network:
+    driver: bridge
+
+volumes:
+  data:
+  logs:
