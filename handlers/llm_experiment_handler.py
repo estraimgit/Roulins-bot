@@ -13,7 +13,9 @@ from utils.randomization import ParticipantRandomizer
 from utils.multilingual import MultilingualManager
 from utils.llm_analyzer import LLMAnalyzer
 from handlers.survey_handler import SurveyHandler
+from handlers.admin_handler import AdminHandler
 from config.nudging_texts import NudgingTexts
+from config.settings import Config
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,7 @@ class LLMExperimentHandler:
         self.multilingual = MultilingualManager()
         self.llm_analyzer = LLMAnalyzer()
         self.survey_handler = SurveyHandler(self.db)
+        self.admin_handler = AdminHandler()
         self.nudging_texts = NudgingTexts()
         
         # Активные сессии
@@ -43,6 +46,13 @@ class LLMExperimentHandler:
                 await update.message.reply_text(
                     "Вы уже участвуете в эксперименте. Пожалуйста, дождитесь его завершения."
                 )
+                return
+            
+            # Проверяем право участия (для админов и тестирования)
+            eligibility = await self.admin_handler.check_user_eligibility(user_id)
+            if not eligibility['can_participate']:
+                if eligibility['message']:
+                    await update.message.reply_text(eligibility['message'])
                 return
             
             # Определяем язык
@@ -251,32 +261,60 @@ class LLMExperimentHandler:
             logger.error(f"Ошибка при завершении эксперимента: {e}")
     
     def _get_welcome_message(self, language: str, group: str) -> str:
-        """Возвращает приветственное сообщение"""
+        """Возвращает приветственное сообщение с описанием ситуации"""
         if language == 'ru':
             if group == 'confess':
                 return (
-                    "Добро пожаловать в эксперимент! Вы в группе A. "
-                    "В течение 5 минут мы будем обсуждать важность честности в принятии решений. "
-                    "Пожалуйста, поделитесь своими мыслями."
+                    "🎭 **Добро пожаловать в эксперимент по дилемме заключенного!**\n\n"
+                    "**Ситуация:** Вы и ваш партнер были арестованы за совместное преступление. "
+                    "Следователь предлагает вам сделку:\n\n"
+                    "• Если вы **признаетесь**, а партнер молчит → вы получите 1 год, партнер 10 лет\n"
+                    "• Если вы **молчите**, а партнер признается → вы получите 10 лет, партнер 1 год\n"
+                    "• Если **оба признаетесь** → каждый получит по 5 лет\n"
+                    "• Если **оба молчите** → каждый получит по 2 года\n\n"
+                    "**Ваша группа: A (Склонность к признанию)**\n"
+                    "В течение 5 минут мы обсудим эту ситуацию. "
+                    "Поделитесь своими мыслями о том, что бы вы выбрали и почему."
                 )
             else:
                 return (
-                    "Добро пожаловать в эксперимент! Вы в группе B. "
-                    "В течение 5 минут мы будем обсуждать важность осторожности в принятии решений. "
-                    "Пожалуйста, поделитесь своими мыслями."
+                    "🎭 **Добро пожаловать в эксперимент по дилемме заключенного!**\n\n"
+                    "**Ситуация:** Вы и ваш партнер были арестованы за совместное преступление. "
+                    "Следователь предлагает вам сделку:\n\n"
+                    "• Если вы **признаетесь**, а партнер молчит → вы получите 1 год, партнер 10 лет\n"
+                    "• Если вы **молчите**, а партнер признается → вы получите 10 лет, партнер 1 год\n"
+                    "• Если **оба признаетесь** → каждый получит по 5 лет\n"
+                    "• Если **оба молчите** → каждый получит по 2 года\n\n"
+                    "**Ваша группа: B (Склонность к молчанию)**\n"
+                    "В течение 5 минут мы обсудим эту ситуацию. "
+                    "Поделитесь своими мыслями о том, что бы вы выбрали и почему."
                 )
         else:
             if group == 'confess':
                 return (
-                    "Welcome to the experiment! You are in Group A. "
-                    "For the next 5 minutes, we will discuss the importance of honesty in decision-making. "
-                    "Please share your thoughts."
+                    "🎭 **Welcome to the Prisoner's Dilemma Experiment!**\n\n"
+                    "**Situation:** You and your partner have been arrested for a joint crime. "
+                    "The detective offers you a deal:\n\n"
+                    "• If you **confess** and partner stays silent → you get 1 year, partner gets 10 years\n"
+                    "• If you **stay silent** and partner confesses → you get 10 years, partner gets 1 year\n"
+                    "• If **both confess** → each gets 5 years\n"
+                    "• If **both stay silent** → each gets 2 years\n\n"
+                    "**Your group: A (Tendency to confess)**\n"
+                    "For the next 5 minutes, we'll discuss this situation. "
+                    "Please share your thoughts on what you would choose and why."
                 )
             else:
                 return (
-                    "Welcome to the experiment! You are in Group B. "
-                    "For the next 5 minutes, we will discuss the importance of caution in decision-making. "
-                    "Please share your thoughts."
+                    "🎭 **Welcome to the Prisoner's Dilemma Experiment!**\n\n"
+                    "**Situation:** You and your partner have been arrested for a joint crime. "
+                    "The detective offers you a deal:\n\n"
+                    "• If you **confess** and partner stays silent → you get 1 year, partner gets 10 years\n"
+                    "• If you **stay silent** and partner confesses → you get 10 years, partner gets 1 year\n"
+                    "• If **both confess** → each gets 5 years\n"
+                    "• If **both stay silent** → each gets 2 years\n\n"
+                    "**Your group: B (Tendency to stay silent)**\n"
+                    "For the next 5 minutes, we'll discuss this situation. "
+                    "Please share your thoughts on what you would choose and why."
                 )
     
     def _get_standard_response(self, group: str, language: str, analysis: Dict) -> str:

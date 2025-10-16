@@ -4,6 +4,7 @@
 
 import logging
 import asyncio
+import json
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -11,6 +12,7 @@ from telegram.ext import ContextTypes
 from config.settings import Config
 from handlers.llm_experiment_handler import LLMExperimentHandler
 from handlers.survey_handler import SurveyHandler
+from handlers.admin_handler import AdminHandler
 from utils.database import DatabaseManager
 
 # Настройка логирования
@@ -33,6 +35,7 @@ class LLMPrisonersDilemmaBot:
         self.db = DatabaseManager()
         self.experiment_handler = LLMExperimentHandler()
         self.survey_handler = SurveyHandler(self.db)
+        self.admin_handler = AdminHandler()
         
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /start"""
@@ -48,6 +51,7 @@ class LLMPrisonersDilemmaBot:
 /help - Показать эту справку
 /status - Показать статус эксперимента
 /llm_status - Показать статус LLM анализа
+/admin - Админские команды (только для администраторов)
 
 **О эксперименте:**
 Это исследование по дилемме заключенного с использованием ИИ для анализа ваших сообщений.
@@ -55,6 +59,9 @@ class LLMPrisonersDilemmaBot:
 
 **Приватность:**
 Все ваши сообщения анонимизированы и используются только для научных целей.
+
+**Тестирование:**
+Администраторы могут проходить эксперимент несколько раз для тестирования.
 """
         await update.message.reply_text(help_text, parse_mode='Markdown')
     
@@ -103,6 +110,10 @@ class LLMPrisonersDilemmaBot:
         
         await update.message.reply_text(status_text)
     
+    async def admin_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик админских команд"""
+        await self.admin_handler.handle_admin_command(update, context)
+    
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик callback запросов"""
         query = update.callback_query
@@ -142,6 +153,7 @@ class LLMPrisonersDilemmaBot:
         application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("status", self.status_command))
         application.add_handler(CommandHandler("llm_status", self.llm_status_command))
+        application.add_handler(CommandHandler("admin", self.admin_command))
         application.add_handler(CallbackQueryHandler(self.handle_callback))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         
@@ -160,6 +172,7 @@ class LLMPrisonersDilemmaBot:
         application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("status", self.status_command))
         application.add_handler(CommandHandler("llm_status", self.llm_status_command))
+        application.add_handler(CommandHandler("admin", self.admin_command))
         application.add_handler(CallbackQueryHandler(self.handle_callback))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         

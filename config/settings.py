@@ -39,6 +39,11 @@ class Config:
     LLM_ENABLED = os.getenv('LLM_ENABLED', 'true').lower() == 'true'
     LLM_ANALYSIS_ENABLED = os.getenv('LLM_ANALYSIS_ENABLED', 'true').lower() == 'true'
     
+    # Admin Configuration
+    ADMIN_USER_IDS = os.getenv('ADMIN_USER_IDS', '').split(',') if os.getenv('ADMIN_USER_IDS') else []
+    ALLOW_MULTIPLE_SESSIONS = os.getenv('ALLOW_MULTIPLE_SESSIONS', 'false').lower() == 'true'
+    TESTING_MODE = os.getenv('TESTING_MODE', 'false').lower() == 'true'
+    
     # Поддерживаемые языки
     SUPPORTED_LANGUAGES = {
         'en': 'English',
