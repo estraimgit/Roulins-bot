@@ -148,7 +148,7 @@ class LLMPrisonersDilemmaBot:
         """Запускает бота в режиме polling"""
         logger.info("Запуск бота в режиме polling...")
         
-        # Создаем приложение
+        # Создаем приложение с JobQueue
         application = Application.builder().token(self.config.BOT_TOKEN).build()
         
         # Добавляем обработчики
@@ -167,7 +167,7 @@ class LLMPrisonersDilemmaBot:
         """Запускает бота в режиме webhook"""
         logger.info("Запуск бота в режиме webhook...")
         
-        # Создаем приложение
+        # Создаем приложение с JobQueue
         application = Application.builder().token(self.config.BOT_TOKEN).build()
         
         # Добавляем обработчики

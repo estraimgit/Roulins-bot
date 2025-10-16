@@ -72,6 +72,8 @@ ssh $SERVER << 'EOF'
         OLD_TESTING_MODE=$(grep "^TESTING_MODE=" .env | cut -d'=' -f2- || echo "")
         OLD_MULTIPLE_SESSIONS=$(grep "^ALLOW_MULTIPLE_SESSIONS=" .env | cut -d'=' -f2- || echo "")
         OLD_LLM_MODEL=$(grep "^LLM_MODEL=" .env | cut -d'=' -f2- || echo "")
+        OLD_LLM_ENABLED=$(grep "^LLM_ENABLED=" .env | cut -d'=' -f2- || echo "")
+        OLD_LLM_ANALYSIS_ENABLED=$(grep "^LLM_ANALYSIS_ENABLED=" .env | cut -d'=' -f2- || echo "")
     fi
     
     # Копируем новый .env
@@ -96,9 +98,27 @@ ssh $SERVER << 'EOF'
     if [ ! -z "$OLD_LLM_MODEL" ]; then
         sed -i "s|^LLM_MODEL=.*|LLM_MODEL=$OLD_LLM_MODEL|" .env
     fi
+    if [ ! -z "$OLD_LLM_ENABLED" ]; then
+        sed -i "s|^LLM_ENABLED=.*|LLM_ENABLED=$OLD_LLM_ENABLED|" .env
+    fi
+    if [ ! -z "$OLD_LLM_ANALYSIS_ENABLED" ]; then
+        sed -i "s|^LLM_ANALYSIS_ENABLED=.*|LLM_ANALYSIS_ENABLED=$OLD_LLM_ANALYSIS_ENABLED|" .env
+    fi
     
     echo "Создаем необходимые директории..."
     mkdir -p data logs
+    
+    echo "Восстанавливаем важные настройки из backup..."
+    if [ -f settings_backup.env ]; then
+        while IFS='=' read -r key value; do
+            if [[ ! -z "$key" && ! "$key" =~ ^# ]]; then
+                sed -i "s|^$key=.*|$key=$value|" .env || echo "$key=$value" >> .env
+            fi
+        done < settings_backup.env
+        echo "✅ Настройки восстановлены из backup"
+    else
+        echo "⚠️ Backup файл не найден, используем сохраненные настройки"
+    fi
     
     echo "Останавливаем старые контейнеры..."
     docker-compose down || true
