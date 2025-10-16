@@ -185,11 +185,16 @@ class PrisonersDilemmaBot:
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         
         # Настраиваем webhook
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=self.config.WEBHOOK_PORT,
-            webhook_url=self.config.WEBHOOK_URL
-        )
+        if self.config.WEBHOOK_URL:
+            application.run_webhook(
+                listen="0.0.0.0",
+                port=self.config.WEBHOOK_PORT,
+                webhook_url=self.config.WEBHOOK_URL
+            )
+        else:
+            # Если webhook URL не настроен, используем polling
+            logger.info("Webhook URL не настроен, переключаемся на polling...")
+            application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 def main():
     """Главная функция"""

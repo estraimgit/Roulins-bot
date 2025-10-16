@@ -33,6 +33,12 @@ class Config:
     GOOGLE_TRANSLATE_API_KEY = os.getenv('GOOGLE_TRANSLATE_API_KEY')
     HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_API_KEY')
     
+    # LLM Configuration
+    CLOUD_RU_API_KEY = os.getenv('CLOUD_RU_API_KEY', '')
+    LLM_MODEL = os.getenv('LLM_MODEL', 'gpt-3.5-turbo')
+    LLM_ENABLED = os.getenv('LLM_ENABLED', 'true').lower() == 'true'
+    LLM_ANALYSIS_ENABLED = os.getenv('LLM_ANALYSIS_ENABLED', 'true').lower() == 'true'
+    
     # Поддерживаемые языки
     SUPPORTED_LANGUAGES = {
         'en': 'English',

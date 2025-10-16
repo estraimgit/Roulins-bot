@@ -76,6 +76,30 @@ class DatabaseManager:
                     )
                 ''')
                 
+                # Таблица для LLM анализа
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS llm_analysis (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        participant_id TEXT NOT NULL,
+                        user_message TEXT NOT NULL,
+                        analysis_json TEXT NOT NULL,
+                        bot_response TEXT NOT NULL,
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (participant_id) REFERENCES participants (participant_id)
+                    )
+                ''')
+                
+                # Таблица для анализа потока разговора
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS conversation_flow (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        participant_id TEXT NOT NULL,
+                        flow_analysis_json TEXT NOT NULL,
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (participant_id) REFERENCES participants (participant_id)
+                    )
+                ''')
+                
                 conn.commit()
                 logger.info("База данных инициализирована успешно")
                 
@@ -275,3 +299,72 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Ошибка получения статистики: {e}")
             return {}
+    
+    async def log_llm_analysis(self, participant_id: str, user_message: str, analysis: Dict, bot_response: str):
+        """Логирует LLM анализ сообщения"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO llm_analysis (participant_id, user_message, analysis_json, bot_response)
+                    VALUES (?, ?, ?, ?)
+                """, (participant_id, user_message, json.dumps(analysis, ensure_ascii=False), bot_response))
+                conn.commit()
+                
+        except Exception as e:
+            logger.error(f"Ошибка при логировании LLM анализа: {e}")
+    
+    async def log_conversation_flow(self, participant_id: str, flow_analysis: Dict):
+        """Логирует анализ потока разговора"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO conversation_flow (participant_id, flow_analysis_json)
+                    VALUES (?, ?)
+                """, (participant_id, json.dumps(flow_analysis, ensure_ascii=False)))
+                conn.commit()
+                
+        except Exception as e:
+            logger.error(f"Ошибка при логировании анализа потока: {e}")
+    
+    async def log_final_conversation_analysis(self, participant_id: str, final_analysis: Dict):
+        """Логирует финальный анализ разговора"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO conversation_flow (participant_id, flow_analysis_json)
+                    VALUES (?, ?)
+                """, (participant_id, json.dumps(final_analysis, ensure_ascii=False)))
+                conn.commit()
+                
+        except Exception as e:
+            logger.error(f"Ошибка при логировании финального анализа: {e}")
+    
+    async def get_llm_analysis_data(self, participant_id: str = None) -> List[Dict]:
+        """Получает данные LLM анализа"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                if participant_id:
+                    cursor.execute("""
+                        SELECT * FROM llm_analysis 
+                        WHERE participant_id = ? 
+                        ORDER BY timestamp
+                    """, (participant_id,))
+                else:
+                    cursor.execute("""
+                        SELECT * FROM llm_analysis 
+                        ORDER BY timestamp
+                    """)
+                
+                results = cursor.fetchall()
+                columns = [description[0] for description in cursor.description]
+                
+                return [dict(zip(columns, row)) for row in results]
+                
+        except Exception as e:
+            logger.error(f"Ошибка при получении данных LLM анализа: {e}")
+            return []
