@@ -35,9 +35,10 @@ class Config:
     
     # LLM Configuration
     CLOUD_RU_API_KEY = os.getenv('CLOUD_RU_API_KEY', '')
-    LLM_MODEL = os.getenv('LLM_MODEL', 'gpt-3.5-turbo')
+    LLM_MODEL = os.getenv('LLM_MODEL', 'GigaChat/GigaChat-2-Max')
     LLM_ENABLED = os.getenv('LLM_ENABLED', 'true').lower() == 'true'
     LLM_ANALYSIS_ENABLED = os.getenv('LLM_ANALYSIS_ENABLED', 'true').lower() == 'true'
+    LLM_SYSTEM_PROMPT = os.getenv('LLM_SYSTEM_PROMPT', 'Ты эксперт по анализу человеческого поведения в экспериментах. Анализируй сообщения и возвращай результат в формате JSON.')
     
     # Admin Configuration
     ADMIN_USER_IDS = os.getenv('ADMIN_USER_IDS', '').split(',') if os.getenv('ADMIN_USER_IDS') else []

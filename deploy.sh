@@ -63,8 +63,39 @@ ssh $SERVER << 'EOF'
     echo "Распаковываем архив..."
     tar -xzf /tmp/prisoners-dilemma-bot.tar.gz
     
-    echo "Копируем .env файл..."
+    echo "Копируем .env файл с сохранением важных настроек..."
+    # Сохраняем важные настройки из старого .env
+    if [ -f .env ]; then
+        OLD_BOT_TOKEN=$(grep "^BOT_TOKEN=" .env | cut -d'=' -f2- || echo "")
+        OLD_CLOUD_API_KEY=$(grep "^CLOUD_RU_API_KEY=" .env | cut -d'=' -f2- || echo "")
+        OLD_ADMIN_IDS=$(grep "^ADMIN_USER_IDS=" .env | cut -d'=' -f2- || echo "")
+        OLD_TESTING_MODE=$(grep "^TESTING_MODE=" .env | cut -d'=' -f2- || echo "")
+        OLD_MULTIPLE_SESSIONS=$(grep "^ALLOW_MULTIPLE_SESSIONS=" .env | cut -d'=' -f2- || echo "")
+        OLD_LLM_MODEL=$(grep "^LLM_MODEL=" .env | cut -d'=' -f2- || echo "")
+    fi
+    
+    # Копируем новый .env
     cp /tmp/.env .
+    
+    # Восстанавливаем важные настройки, если они были
+    if [ ! -z "$OLD_BOT_TOKEN" ]; then
+        sed -i "s|^BOT_TOKEN=.*|BOT_TOKEN=$OLD_BOT_TOKEN|" .env
+    fi
+    if [ ! -z "$OLD_CLOUD_API_KEY" ]; then
+        sed -i "s|^CLOUD_RU_API_KEY=.*|CLOUD_RU_API_KEY=$OLD_CLOUD_API_KEY|" .env
+    fi
+    if [ ! -z "$OLD_ADMIN_IDS" ]; then
+        sed -i "s|^ADMIN_USER_IDS=.*|ADMIN_USER_IDS=$OLD_ADMIN_IDS|" .env
+    fi
+    if [ ! -z "$OLD_TESTING_MODE" ]; then
+        sed -i "s|^TESTING_MODE=.*|TESTING_MODE=$OLD_TESTING_MODE|" .env
+    fi
+    if [ ! -z "$OLD_MULTIPLE_SESSIONS" ]; then
+        sed -i "s|^ALLOW_MULTIPLE_SESSIONS=.*|ALLOW_MULTIPLE_SESSIONS=$OLD_MULTIPLE_SESSIONS|" .env
+    fi
+    if [ ! -z "$OLD_LLM_MODEL" ]; then
+        sed -i "s|^LLM_MODEL=.*|LLM_MODEL=$OLD_LLM_MODEL|" .env
+    fi
     
     echo "Создаем необходимые директории..."
     mkdir -p data logs

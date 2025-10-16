@@ -4,7 +4,7 @@
 import sqlite3
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from cryptography.fernet import Fernet
 import base64
@@ -368,3 +368,35 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Ошибка при получении данных LLM анализа: {e}")
             return []
+    
+    async def log_experiment_start(self, participant_id: str, start_time, experiment_group: str, language: str):
+        """Логирует начало эксперимента"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE participants 
+                    SET start_time = ?, end_time = ?, experiment_group = ?, language = ?
+                    WHERE participant_id = ?
+                """, (start_time, start_time + timedelta(minutes=5), experiment_group, language, participant_id))
+                conn.commit()
+                logger.info(f"Начало эксперимента записано для участника {participant_id}")
+                
+        except Exception as e:
+            logger.error(f"Ошибка при логировании начала эксперимента: {e}")
+    
+    async def log_experiment_completion(self, participant_id: str, end_time, total_messages: int):
+        """Логирует завершение эксперимента"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE participants 
+                    SET end_time = ?, total_messages = ?
+                    WHERE participant_id = ?
+                """, (end_time, total_messages, participant_id))
+                conn.commit()
+                logger.info(f"Завершение эксперимента записано для участника {participant_id}")
+                
+        except Exception as e:
+            logger.error(f"Ошибка при логировании завершения эксперимента: {e}")

@@ -57,6 +57,10 @@ class AdminHandler:
             await self._export_data(update, context)
         elif command == "toggle_testing":
             await self._toggle_testing_mode(update, context)
+        elif command == "prompt":
+            await self._manage_system_prompt(update, context)
+        elif command == "llm_status":
+            await self._show_llm_status(update, context)
         else:
             await update.message.reply_text("❌ Неизвестная команда. Используйте /admin help")
     
@@ -77,9 +81,17 @@ class AdminHandler:
 **Настройки:**
 `/admin toggle_testing` - Включить/выключить режим тестирования
 
+**LLM управление:**
+• `/admin llm_status` - статус LLM
+• `/admin prompt` - управление системным промптом
+• `/admin prompt show` - показать текущий промпт
+• `/admin prompt set <промпт>` - установить новый промпт
+• `/admin prompt reset` - сбросить к умолчанию
+
 **Примеры:**
 `/admin reset 123456789` - Сбросить сессию пользователя 123456789
 `/admin stats` - Показать статистику
+`/admin prompt set Ты помощник по этике` - Установить новый промпт
 """
         await update.message.reply_text(help_text, parse_mode='Markdown')
     
@@ -328,3 +340,100 @@ class AdminHandler:
                 'reason': 'error',
                 'message': "Произошла ошибка при проверке права участия."
             }
+    
+    async def _manage_system_prompt(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Управление системным промптом LLM"""
+        try:
+            if len(context.args) < 2:
+                # Показываем текущий промпт
+                current_prompt = Config.LLM_SYSTEM_PROMPT
+                await update.message.reply_text(
+                    f"🤖 **Текущий системный промпт:**\n\n`{current_prompt}`\n\n"
+                    "**Использование:**\n"
+                    "`/admin prompt show` - показать текущий промпт\n"
+                    "`/admin prompt set <новый промпт>` - установить новый промпт\n"
+                    "`/admin prompt reset` - сбросить к умолчанию",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            action = context.args[1]
+            
+            if action == "show":
+                current_prompt = Config.LLM_SYSTEM_PROMPT
+                await update.message.reply_text(
+                    f"🤖 **Текущий системный промпт:**\n\n`{current_prompt}`",
+                    parse_mode='Markdown'
+                )
+            
+            elif action == "set":
+                if len(context.args) < 3:
+                    await update.message.reply_text(
+                        "❌ Укажите новый промпт:\n"
+                        "`/admin prompt set <новый промпт>`",
+                        parse_mode='Markdown'
+                    )
+                    return
+                
+                new_prompt = " ".join(context.args[2:])
+                # Обновляем переменную окружения (временно)
+                import os
+                os.environ['LLM_SYSTEM_PROMPT'] = new_prompt
+                
+                await update.message.reply_text(
+                    f"✅ **Системный промпт обновлен:**\n\n`{new_prompt}`\n\n"
+                    "⚠️ Изменения вступят в силу после перезапуска бота.",
+                    parse_mode='Markdown'
+                )
+            
+            elif action == "reset":
+                default_prompt = "Ты эксперт по анализу человеческого поведения в экспериментах. Анализируй сообщения и возвращай результат в формате JSON."
+                import os
+                os.environ['LLM_SYSTEM_PROMPT'] = default_prompt
+                
+                await update.message.reply_text(
+                    f"✅ **Системный промпт сброшен к умолчанию:**\n\n`{default_prompt}`\n\n"
+                    "⚠️ Изменения вступят в силу после перезапуска бота.",
+                    parse_mode='Markdown'
+                )
+            
+            else:
+                await update.message.reply_text(
+                    "❌ Неизвестное действие. Используйте:\n"
+                    "• `show` - показать текущий промпт\n"
+                    "• `set <промпт>` - установить новый промпт\n"
+                    "• `reset` - сбросить к умолчанию",
+                    parse_mode='Markdown'
+                )
+                
+        except Exception as e:
+            logger.error(f"Ошибка при управлении системным промптом: {e}")
+            await update.message.reply_text("❌ Произошла ошибка при управлении системным промптом.")
+    
+    async def _show_llm_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показывает статус LLM"""
+        try:
+            from config.settings import Config
+            
+            status_text = f"""
+🤖 **Статус LLM:**
+
+**Настройки:**
+• LLM включен: {'✅' if Config.LLM_ENABLED else '❌'}
+• Анализ включен: {'✅' if Config.LLM_ANALYSIS_ENABLED else '❌'}
+• Модель: `{Config.LLM_MODEL}`
+• API ключ: {'✅ Настроен' if Config.CLOUD_RU_API_KEY else '❌ Не настроен'}
+
+**Системный промпт:**
+`{Config.LLM_SYSTEM_PROMPT[:100]}{'...' if len(Config.LLM_SYSTEM_PROMPT) > 100 else ''}`
+
+**Команды:**
+• `/admin prompt` - управление системным промптом
+• `/admin llm_status` - показать этот статус
+"""
+            
+            await update.message.reply_text(status_text, parse_mode='Markdown')
+            
+        except Exception as e:
+            logger.error(f"Ошибка при показе статуса LLM: {e}")
+            await update.message.reply_text("❌ Произошла ошибка при получении статуса LLM.")

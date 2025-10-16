@@ -144,12 +144,29 @@ class LLMExperimentHandler:
             welcome_text = self._get_welcome_message(language, group)
             await query.edit_message_text(welcome_text)
             
+            # Записываем начало эксперимента в базу данных
+            await self.db.log_experiment_start(
+                participant_id=participant_id,
+                start_time=datetime.now(),
+                experiment_group=group,
+                language=language
+            )
+            
             # Запускаем таймер завершения эксперимента (если JobQueue доступен)
             if hasattr(context, 'job_queue') and context.job_queue:
+                # Таймер завершения эксперимента
                 context.job_queue.run_once(
-                    self._end_experiment, 
+                    self._end_experiment_timer, 
                     300,  # 5 минут
                     data={'user_id': user_id}
+                )
+                
+                # Периодический таймер для показа оставшегося времени
+                context.job_queue.run_repeating(
+                    self._show_time_remaining,
+                    60,  # каждую минуту
+                    data={'user_id': user_id},
+                    first=60  # первое уведомление через 1 минуту
                 )
             else:
                 logger.warning("JobQueue не доступен, таймер завершения эксперимента не установлен")
@@ -262,6 +279,101 @@ class LLMExperimentHandler:
                 "Произошла ошибка при обработке сообщения. Попробуйте еще раз."
             )
     
+    async def _show_time_remaining(self, context: ContextTypes.DEFAULT_TYPE):
+        """Показывает оставшееся время эксперимента"""
+        user_id = context.job.data['user_id']
+        
+        if user_id in self.active_sessions:
+            session_data = self.active_sessions[user_id]
+            start_time = session_data['start_time']
+            elapsed = (datetime.now() - start_time).total_seconds()
+            remaining = max(0, 300 - elapsed)  # 5 минут = 300 секунд
+            
+            if remaining > 0:
+                minutes = int(remaining // 60)
+                seconds = int(remaining % 60)
+                
+                if session_data['language'] == 'ru':
+                    if minutes > 0:
+                        time_message = f"⏰ Осталось времени: {minutes} мин {seconds} сек"
+                    else:
+                        time_message = f"⏰ Осталось времени: {seconds} сек"
+                else:
+                    if minutes > 0:
+                        time_message = f"⏰ Time remaining: {minutes} min {seconds} sec"
+                    else:
+                        time_message = f"⏰ Time remaining: {seconds} sec"
+                
+                try:
+                    await context.bot.send_message(chat_id=user_id, text=time_message)
+                except Exception as e:
+                    logger.error(f"Ошибка при отправке сообщения о времени: {e}")
+            else:
+                # Время истекло, завершаем эксперимент
+                await self._end_experiment_timer(context)
+        else:
+            # Сессия не найдена, отменяем задачу
+            context.job.schedule_removal()
+
+    async def _end_experiment_timer(self, context: ContextTypes.DEFAULT_TYPE):
+        """Завершает эксперимент по таймеру"""
+        user_id = context.job.data['user_id']
+        
+        if user_id in self.active_sessions:
+            session_data = self.active_sessions[user_id]
+            
+            # Анализируем финальное состояние разговора
+            if user_id in self.conversation_history and self.conversation_history[user_id]:
+                final_analysis = self.llm_analyzer.analyze_conversation_flow(
+                    self.conversation_history[user_id]
+                )
+                
+                await self.db.log_final_conversation_analysis(
+                    participant_id=session_data['participant_id'],
+                    final_analysis=final_analysis
+                )
+            
+            # Записываем завершение эксперимента
+            await self.db.log_experiment_completion(
+                participant_id=session_data['participant_id'],
+                end_time=datetime.now(),
+                total_messages=session_data['message_count']
+            )
+            
+            # Отправляем сообщение о завершении
+            if session_data['language'] == 'ru':
+                end_message = "⏰ Время эксперимента истекло! Спасибо за участие."
+            else:
+                end_message = "⏰ Experiment time is up! Thank you for participating."
+            
+            try:
+                await context.bot.send_message(chat_id=user_id, text=end_message)
+            except Exception as e:
+                logger.error(f"Ошибка при отправке сообщения о завершении: {e}")
+            
+            # Показываем опрос
+            try:
+                # Создаем фиктивный update для опроса
+                from telegram import Update
+                fake_update = Update(update_id=0)
+                fake_update.effective_user = type('obj', (object,), {'id': user_id})()
+                fake_update.effective_chat = type('obj', (object,), {'id': user_id})()
+                
+                await self.survey_handler.start_survey(
+                    fake_update, context, 
+                    session_data['participant_id'], 
+                    session_data['language']
+                )
+            except Exception as e:
+                logger.error(f"Ошибка при запуске опроса: {e}")
+            
+            # Очищаем сессию
+            del self.active_sessions[user_id]
+            if user_id in self.conversation_history:
+                del self.conversation_history[user_id]
+            
+            logger.info(f"Эксперимент завершен по таймеру для пользователя {user_id}")
+
     async def _end_experiment(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int):
         """Завершает эксперимент"""
         try:

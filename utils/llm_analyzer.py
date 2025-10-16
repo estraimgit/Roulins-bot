@@ -98,7 +98,7 @@ class LLMAnalyzer:
                 "messages": [
                     {
                         "role": "system",
-                        "content": "Ты эксперт по анализу человеческого поведения в экспериментах. Анализируй сообщения и возвращай результат в формате JSON."
+                        "content": Config.LLM_SYSTEM_PROMPT
                     },
                     {
                         "role": "user",

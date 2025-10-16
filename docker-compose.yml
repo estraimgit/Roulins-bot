@@ -21,7 +21,7 @@ services:
       - ALLOW_MULTIPLE_SESSIONS=${ALLOW_MULTIPLE_SESSIONS:-false}
       - TESTING_MODE=${TESTING_MODE:-false}
       - CLOUD_RU_API_KEY=${CLOUD_RU_API_KEY:-}
-      - LLM_MODEL=${LLM_MODEL:-gpt-3.5-turbo}
+      - LLM_MODEL=${LLM_MODEL:-GigaChat/GigaChat-2-Max}
       - LLM_ENABLED=${LLM_ENABLED:-true}
       - LLM_ANALYSIS_ENABLED=${LLM_ANALYSIS_ENABLED:-true}
     volumes:
