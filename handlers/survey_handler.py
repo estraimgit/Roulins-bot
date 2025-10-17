@@ -15,8 +15,9 @@ logger = logging.getLogger(__name__)
 class SurveyHandler:
     """Обработчик опроса после эксперимента"""
     
-    def __init__(self, db_manager: DatabaseManager):
+    def __init__(self, db_manager: DatabaseManager, experiment_handler=None):
         self.db = db_manager
+        self.experiment_handler = experiment_handler
         self.survey_sessions: Dict[int, Dict[str, Any]] = {}
     
     async def start_survey(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
@@ -239,6 +240,15 @@ class SurveyHandler:
             logger.info(f"Сессия опроса удалена для пользователя {user_id}")
         else:
             logger.warning(f"Сессия опроса не найдена для удаления у пользователя {user_id}")
+        
+        # Очищаем основную сессию эксперимента
+        if self.experiment_handler:
+            if user_id in self.experiment_handler.active_sessions:
+                del self.experiment_handler.active_sessions[user_id]
+                logger.info(f"Основная сессия эксперимента удалена для пользователя {user_id}")
+            if user_id in self.experiment_handler.conversation_history:
+                del self.experiment_handler.conversation_history[user_id]
+                logger.info(f"История разговора удалена для пользователя {user_id}")
         
         logger.info(f"Опрос завершен для участника {participant_id}")
     

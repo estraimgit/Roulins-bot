@@ -34,7 +34,7 @@ class LLMPrisonersDilemmaBot:
         self.config = Config()
         self.db = DatabaseManager()
         self.experiment_handler = LLMExperimentHandler()
-        self.survey_handler = SurveyHandler(self.db)
+        self.survey_handler = SurveyHandler(self.db, self.experiment_handler)
         self.admin_handler = AdminHandler()
         
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

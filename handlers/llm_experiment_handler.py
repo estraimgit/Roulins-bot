@@ -862,16 +862,20 @@ class LLMExperimentHandler:
             if session_data['language'] == 'ru':
                 decision_text = "признались" if decision == "confess" else "решили молчать"
                 thank_you_text = (
-                    f"✅ **Спасибо за участие в эксперименте!**\n\n"
+                    f"🎉 **Спасибо за участие в эксперименте!**\n\n"
                     f"Ваше финальное решение: **{decision_text}**\n\n"
-                    f"Эксперимент завершен. Ваши данные будут использованы для научного исследования."
+                    f"💡 **Важно:** В этом эксперименте нет правильного или неправильного результата. "
+                    f"Каждое решение имеет свои последствия, и мы изучаем, как люди принимают решения в сложных ситуациях.\n\n"
+                    f"📊 Ваши данные помогут нам лучше понять человеческое поведение в дилеммах сотрудничества."
                 )
             else:
                 decision_text = "confessed" if decision == "confess" else "chose to stay silent"
                 thank_you_text = (
-                    f"✅ **Thank you for participating in the experiment!**\n\n"
+                    f"🎉 **Thank you for participating in the experiment!**\n\n"
                     f"Your final decision: **{decision_text}**\n\n"
-                    f"The experiment is complete. Your data will be used for scientific research."
+                    f"💡 **Important:** There is no right or wrong result in this experiment. "
+                    f"Each decision has its consequences, and we study how people make decisions in complex situations.\n\n"
+                    f"📊 Your data will help us better understand human behavior in cooperation dilemmas."
                 )
             
             try:
@@ -884,7 +888,7 @@ class LLMExperimentHandler:
                 except Exception as e2:
                     logger.error(f"Не удалось отправить сообщение с благодарностью: {e2}")
             
-            # Показываем опрос
+            # Показываем опрос (НЕ удаляем сессию до завершения опроса)
             try:
                 await self.survey_handler.start_survey(
                     update, context, 
@@ -894,11 +898,11 @@ class LLMExperimentHandler:
                 )
             except Exception as e:
                 logger.error(f"Ошибка при запуске опроса: {e}")
-            
-            # Очищаем сессию
-            del self.active_sessions[user_id]
-            if user_id in self.conversation_history:
-                del self.conversation_history[user_id]
+                # Если опрос не запустился, очищаем сессию
+                if user_id in self.active_sessions:
+                    del self.active_sessions[user_id]
+                if user_id in self.conversation_history:
+                    del self.conversation_history[user_id]
                 
         except Exception as e:
             logger.error(f"Ошибка при обработке финального решения: {e}")
