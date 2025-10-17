@@ -58,6 +58,13 @@ class DatabaseManager:
                     # Поле уже существует
                     pass
                 
+                # Добавляем поле total_messages если его нет
+                try:
+                    cursor.execute("ALTER TABLE participants ADD COLUMN total_messages INTEGER DEFAULT 0")
+                except sqlite3.OperationalError:
+                    # Поле уже существует
+                    pass
+                
                 # Таблица сообщений чата
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS chat_messages (

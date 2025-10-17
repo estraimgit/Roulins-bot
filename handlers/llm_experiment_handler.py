@@ -239,7 +239,8 @@ class LLMExperimentHandler:
                 context.job_queue.run_once(
                     self._end_experiment_timer, 
                     300,  # 5 минут
-                    data={'user_id': user_id}
+                    data={'user_id': user_id},
+                    name=f"_end_experiment_timer_{user_id}"
                 )
                 
                 # Периодический таймер для обновления счетчика времени
@@ -247,7 +248,8 @@ class LLMExperimentHandler:
                     self._update_time_counter,
                     10,  # каждые 10 секунд
                     data={'user_id': user_id},
-                    first=10  # первое обновление через 10 секунд
+                    first=10,  # первое обновление через 10 секунд
+                    name=f"_update_time_counter_{user_id}"
                 )
                 
                 logger.info(f"Таймеры обсуждения запущены для пользователя {user_id}")
@@ -831,6 +833,27 @@ class LLMExperimentHandler:
             return
         
         session_data = self.active_sessions[user_id]
+        
+        # Отменяем все активные таймеры для этого пользователя
+        if context.job_queue:
+            # Отменяем таймер завершения эксперимента
+            job_name = f"_end_experiment_timer_{user_id}"
+            try:
+                context.job_queue.get_jobs_by_name(job_name)
+                for job in context.job_queue.get_jobs_by_name(job_name):
+                    job.schedule_removal()
+                logger.info(f"Отменен таймер завершения эксперимента для пользователя {user_id}")
+            except Exception as e:
+                logger.warning(f"Не удалось отменить таймер завершения эксперимента: {e}")
+            
+            # Отменяем таймер обновления счетчика
+            counter_job_name = f"_update_time_counter_{user_id}"
+            try:
+                for job in context.job_queue.get_jobs_by_name(counter_job_name):
+                    job.schedule_removal()
+                logger.info(f"Отменен таймер обновления счетчика для пользователя {user_id}")
+            except Exception as e:
+                logger.warning(f"Не удалось отменить таймер обновления счетчика: {e}")
         
         try:
             # Записываем финальное решение
