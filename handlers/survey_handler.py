@@ -24,6 +24,8 @@ class SurveyHandler:
         """Начинает опрос для участника"""
         user_id = update.effective_user.id
         
+        logger.info(f"Начинаем опрос для пользователя {user_id}, участник {participant_id}")
+        
         # Инициализируем сессию опроса
         survey_data = {
             'participant_id': participant_id,
@@ -33,6 +35,7 @@ class SurveyHandler:
         }
         
         self.survey_sessions[user_id] = survey_data
+        logger.info(f"Сессия опроса создана для пользователя {user_id}. Всего сессий: {len(self.survey_sessions)}")
         
         # Показываем первый вопрос
         await self._show_question(update, context, survey_data)
@@ -121,7 +124,10 @@ class SurveyHandler:
         
         user_id = update.effective_user.id
         
+        logger.info(f"Обрабатываем ответ опроса для пользователя {user_id}. Доступные сессии: {list(self.survey_sessions.keys())}")
+        
         if user_id not in self.survey_sessions:
+            logger.warning(f"Сессия опроса не найдена для пользователя {user_id}")
             try:
                 await query.edit_message_text("❌ Сессия опроса не найдена.")
             except Exception as e:
@@ -139,6 +145,11 @@ class SurveyHandler:
         data_parts = query.data.split('_')
         question_num = int(data_parts[1][1])  # q1 -> 1
         answer = '_'.join(data_parts[2:])  # Остальная часть ответа
+        
+        # Проверяем, не отвечал ли пользователь уже на этот вопрос
+        if f'question_{question_num}' in survey_data['responses']:
+            logger.warning(f"Пользователь {user_id} уже отвечал на вопрос {question_num}")
+            return
         
         # Сохраняем ответ
         survey_data['responses'][f'question_{question_num}'] = answer
@@ -224,6 +235,9 @@ class SurveyHandler:
         user_id = update.effective_user.id
         if user_id in self.survey_sessions:
             del self.survey_sessions[user_id]
+            logger.info(f"Сессия опроса удалена для пользователя {user_id}")
+        else:
+            logger.warning(f"Сессия опроса не найдена для удаления у пользователя {user_id}")
         
         logger.info(f"Опрос завершен для участника {participant_id}")
     
