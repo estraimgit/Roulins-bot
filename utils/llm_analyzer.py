@@ -18,7 +18,7 @@ class LLMAnalyzer:
     def __init__(self):
         self.api_key = Config.CLOUD_RU_API_KEY
         self.base_url = "https://foundation-models.api.cloud.ru/v1"
-        self.model = "GigaChat/GigaChat-2-Max"  # Используем GigaChat модель
+        self.model = "Qwen/Qwen3-235B-A22B-Instruct-2507"  # Используем Qwen модель (более стабильная)
         
     def analyze_message(self, message: str, context: Dict = None) -> Dict:
         """
