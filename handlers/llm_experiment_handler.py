@@ -445,8 +445,8 @@ class LLMExperimentHandler:
                 'sender': 'user'
             })
             
-            # Показываем анимированную иконку многоточия
-            typing_message = await update.message.reply_text("⏳")
+            # Показываем анимированный индикатор печати
+            typing_message = await update.message.reply_text("✍️")
             
             # Запускаем анимацию многоточия
             animation_task = asyncio.create_task(self._animate_dots_indicator(typing_message))
@@ -581,8 +581,8 @@ class LLMExperimentHandler:
             
             # Анализируем финальное состояние разговора
             if self.conversation_history[user_id]:
-                # Показываем анимированную иконку анализа
-                typing_message = await update.message.reply_text("📊")
+                # Показываем анимированный индикатор анализа
+                typing_message = await update.message.reply_text("📝")
                 
                 # Запускаем анимацию индикатора
                 animation_task = asyncio.create_task(self._animate_analysis_indicator(typing_message))
@@ -713,20 +713,20 @@ class LLMExperimentHandler:
         await update.message.reply_text(status_text)
     
     async def _animate_dots_indicator(self, message):
-        """Анимирует индикатор многоточия"""
-        dots_indicators = [
-            "⏳",
-            "⏳.",
-            "⏳..",
-            "⏳...",
-            "⏳..",
-            "⏳.",
-            "⏳"
+        """Анимирует индикатор печати"""
+        typing_indicators = [
+            "✍️",
+            "✍️.",
+            "✍️..",
+            "✍️...",
+            "✍️..",
+            "✍️.",
+            "✍️"
         ]
         
         try:
             while True:
-                for indicator in dots_indicators:
+                for indicator in typing_indicators:
                     try:
                         await message.edit_text(indicator)
                         await asyncio.sleep(0.4)
@@ -738,15 +738,15 @@ class LLMExperimentHandler:
             pass
     
     async def _animate_analysis_indicator(self, message):
-        """Анимирует индикатор анализа многоточием"""
+        """Анимирует индикатор анализа"""
         analysis_indicators = [
-            "📊",
-            "📊.",
-            "📊..",
-            "📊...",
-            "📊..",
-            "📊.",
-            "📊"
+            "📝",
+            "📝.",
+            "📝..",
+            "📝...",
+            "📝..",
+            "📝.",
+            "📝"
         ]
         
         try:
