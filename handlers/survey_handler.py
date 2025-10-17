@@ -20,9 +20,10 @@ class SurveyHandler:
         self.survey_sessions: Dict[int, Dict[str, Any]] = {}
     
     async def start_survey(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
-                          participant_id: str, language: str):
+                          participant_id: str, language: str, user_id: int = None):
         """Начинает опрос для участника"""
-        user_id = update.effective_user.id
+        if user_id is None:
+            user_id = update.effective_user.id
         
         logger.info(f"Начинаем опрос для пользователя {user_id}, участник {participant_id}")
         

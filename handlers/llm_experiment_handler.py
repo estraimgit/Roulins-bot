@@ -557,7 +557,7 @@ class LLMExperimentHandler:
             context.job.schedule_removal()
 
     async def _end_experiment_timer(self, context: ContextTypes.DEFAULT_TYPE):
-        """Показывает финальное решение по истечении времени"""
+        """Завершает эксперимент по истечении времени"""
         user_id = context.job.data['user_id']
         
         if user_id in self.active_sessions:
@@ -605,7 +605,8 @@ class LLMExperimentHandler:
             await self.survey_handler.start_survey(
                 update, context, 
                 session_data['participant_id'], 
-                session_data['language']
+                session_data['language'],
+                user_id
             )
             
         except Exception as e:
@@ -616,24 +617,34 @@ class LLMExperimentHandler:
         if language == 'ru':
             return (
                 "🎭 **Добро пожаловать в эксперимент по дилемме заключенного!**\n\n"
-                "**Ситуация:** Вы и ваш партнер были арестованы за совместное преступление. "
-                "Следователь предлагает вам сделку:\n\n"
-                "• Если вы **признаетесь**, а партнер молчит → вы получите 1 год, партнер 10 лет\n"
-                "• Если вы **молчите**, а партнер признается → вы получите 10 лет, партнер 1 год\n"
-                "• Если **оба признаетесь** → каждый получит по 5 лет\n"
-                "• Если **оба молчите** → каждый получит по 2 года\n\n"
-                "Когда будете готовы, нажмите кнопку ниже, чтобы начать 5-минутное обсуждение этой ситуации."
+                "**📋 Ситуация:**\n"
+                "Два человека пойманы с украденными вещами и подозреваются в краже со взломом. "
+                "Доказательств недостаточно для осуждения, если только один или оба не признаются. "
+                "Однако их можно осудить за хранение краденого — менее серьезное преступление.\n\n"
+                "**⚖️ Варианты наказания:**\n"
+                "🔓 **Оба признаются** → по 2 года каждому\n"
+                "🔒 **Оба молчат** → по 6 месяцев каждому\n"
+                "🔓 **Только вы признаетесь** → вы свободны, партнер 5 лет\n"
+                "🔒 **Только вы молчите** → вы 5 лет, партнер свободен\n\n"
+                "**🎯 Ваша задача:**\n"
+                "Обдумайте ситуацию и примите решение. У вас будет 5 минут на размышления.\n\n"
+                "Готовы начать? Нажмите кнопку ниже!"
             )
         else:
             return (
                 "🎭 **Welcome to the Prisoner's Dilemma Experiment!**\n\n"
-                "**Situation:** You and your partner have been arrested for a joint crime. "
-                "The detective offers you a deal:\n\n"
-                "• If you **confess** and partner stays silent → you get 1 year, partner gets 10 years\n"
-                "• If you **stay silent** and partner confesses → you get 10 years, partner gets 1 year\n"
-                "• If **both confess** → each gets 5 years\n"
-                "• If **both stay silent** → each gets 2 years\n\n"
-                "When you're ready, click the button below to start the 5-minute discussion of this situation."
+                "**📋 Situation:**\n"
+                "Two people are caught with stolen goods and suspected of burglary. "
+                "There's insufficient evidence for conviction unless one or both confess. "
+                "However, they can be convicted of possession of stolen property — a less serious crime.\n\n"
+                "**⚖️ Sentencing Options:**\n"
+                "🔓 **Both confess** → 2 years each\n"
+                "🔒 **Both stay silent** → 6 months each\n"
+                "🔓 **Only you confess** → you go free, partner gets 5 years\n"
+                "🔒 **Only you stay silent** → you get 5 years, partner goes free\n\n"
+                "**🎯 Your Task:**\n"
+                "Think about the situation and make your decision. You have 5 minutes to consider.\n\n"
+                "Ready to start? Click the button below!"
             )
     
     def _get_standard_response(self, group: str, language: str, analysis: Dict) -> str:
@@ -878,7 +889,8 @@ class LLMExperimentHandler:
                 await self.survey_handler.start_survey(
                     update, context, 
                     session_data['participant_id'], 
-                    session_data['language']
+                    session_data['language'],
+                    user_id
                 )
             except Exception as e:
                 logger.error(f"Ошибка при запуске опроса: {e}")

@@ -84,6 +84,21 @@ class DatabaseManager:
                     )
                 ''')
                 
+                # Таблица активных сессий опроса
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS survey_sessions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        telegram_user_id INTEGER UNIQUE NOT NULL,
+                        participant_id TEXT NOT NULL,
+                        language TEXT NOT NULL,
+                        current_question INTEGER NOT NULL,
+                        responses TEXT NOT NULL, -- JSON строка с ответами
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (participant_id) REFERENCES participants (participant_id)
+                    )
+                ''')
+                
                 # Таблица для LLM анализа
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS llm_analysis (
