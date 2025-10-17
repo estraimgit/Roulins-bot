@@ -141,9 +141,23 @@ class LLMExperimentHandler:
                 )
                 return
             
-            # Отправляем приветственное сообщение
+            # Отправляем приветственное сообщение с кнопкой "Начать обсуждение"
             welcome_text = self._get_welcome_message(language, group)
-            await query.edit_message_text(welcome_text, parse_mode='Markdown')
+            
+            # Создаем кнопку "Начать обсуждение"
+            if language == 'ru':
+                button_text = "🚀 Начать обсуждение"
+            else:
+                button_text = "🚀 Start Discussion"
+            
+            keyboard = [[InlineKeyboardButton(button_text, callback_data=f"start_discussion_{user_id}")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                welcome_text, 
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
             
             # Записываем начало эксперимента в базу данных
             await self.db.log_experiment_start(
@@ -153,25 +167,6 @@ class LLMExperimentHandler:
                 language=language
             )
             
-            # Запускаем таймер завершения эксперимента (если JobQueue доступен)
-            if hasattr(context, 'job_queue') and context.job_queue:
-                # Таймер завершения эксперимента
-                context.job_queue.run_once(
-                    self._end_experiment_timer, 
-                    300,  # 5 минут
-                    data={'user_id': user_id}
-                )
-                
-                # Периодический таймер для показа оставшегося времени
-                context.job_queue.run_repeating(
-                    self._show_time_remaining,
-                    60,  # каждую минуту
-                    data={'user_id': user_id},
-                    first=60  # первое уведомление через 1 минуту
-                )
-            else:
-                logger.warning("JobQueue не доступен, таймер завершения эксперимента не установлен")
-            
             logger.info(f"Эксперимент начат для пользователя {user_id}, группа: {group}, язык: {language}")
             
         except Exception as e:
@@ -179,6 +174,228 @@ class LLMExperimentHandler:
             await query.edit_message_text(
                 "Произошла ошибка при выборе языка. Попробуйте еще раз."
             )
+    
+    async def handle_start_discussion(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обрабатывает нажатие кнопки 'Начать обсуждение'"""
+        query = update.callback_query
+        
+        try:
+            await query.answer()
+        except Exception as e:
+            logger.warning(f"Не удалось ответить на callback query: {e}")
+        
+        user_id = query.from_user.id
+        
+        if user_id not in self.active_sessions:
+            try:
+                await query.edit_message_text("❌ Сессия не найдена.")
+            except Exception as e:
+                logger.warning(f"Не удалось отредактировать сообщение: {e}")
+            return
+        
+        session_data = self.active_sessions[user_id]
+        language = session_data['language']
+        
+        try:
+            # Обновляем время начала обсуждения
+            session_data['discussion_start_time'] = datetime.now()
+            session_data['discussion_end_time'] = datetime.now() + timedelta(minutes=5)
+            
+            # Отправляем сообщение о начале обсуждения
+            if language == 'ru':
+                discussion_text = (
+                    "🎯 **Обсуждение началось!**\n\n"
+                    "Теперь у вас есть 5 минут, чтобы поделиться своими мыслями о дилемме заключенного. "
+                    "Расскажите, что бы вы выбрали и почему.\n\n"
+                    "⏰ **Время:** 5:00"
+                )
+                end_button_text = "🏁 Завершить обсуждение"
+            else:
+                discussion_text = (
+                    "🎯 **Discussion Started!**\n\n"
+                    "You now have 5 minutes to share your thoughts about the prisoner's dilemma. "
+                    "Tell us what you would choose and why.\n\n"
+                    "⏰ **Time:** 5:00"
+                )
+                end_button_text = "🏁 End Discussion"
+            
+            # Создаем кнопку "Завершить обсуждение"
+            keyboard = [[InlineKeyboardButton(end_button_text, callback_data=f"end_discussion_{user_id}")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            message = await query.edit_message_text(
+                discussion_text,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+            
+            # Сохраняем message_id для обновления счетчика времени
+            if message:
+                session_data['timer_message_id'] = message.message_id
+            
+            # Запускаем таймеры (если JobQueue доступен)
+            if hasattr(context, 'job_queue') and context.job_queue:
+                # Таймер завершения обсуждения
+                context.job_queue.run_once(
+                    self._end_experiment_timer, 
+                    300,  # 5 минут
+                    data={'user_id': user_id}
+                )
+                
+                # Периодический таймер для обновления счетчика времени
+                context.job_queue.run_repeating(
+                    self._update_time_counter,
+                    10,  # каждые 10 секунд
+                    data={'user_id': user_id},
+                    first=10  # первое обновление через 10 секунд
+                )
+                
+                logger.info(f"Таймеры обсуждения запущены для пользователя {user_id}")
+            else:
+                logger.warning("JobQueue не доступен, таймеры обсуждения не установлены")
+                
+        except Exception as e:
+            logger.error(f"Ошибка при запуске обсуждения: {e}")
+            try:
+                await query.edit_message_text("❌ Произошла ошибка при запуске обсуждения.")
+            except Exception as e2:
+                logger.warning(f"Не удалось отредактировать сообщение об ошибке: {e2}")
+    
+    async def handle_end_discussion(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обрабатывает нажатие кнопки 'Завершить обсуждение'"""
+        query = update.callback_query
+        
+        try:
+            await query.answer()
+        except Exception as e:
+            logger.warning(f"Не удалось ответить на callback query: {e}")
+        
+        user_id = query.from_user.id
+        
+        if user_id not in self.active_sessions:
+            try:
+                await query.edit_message_text("❌ Сессия не найдена.")
+            except Exception as e:
+                logger.warning(f"Не удалось отредактировать сообщение: {e}")
+            return
+        
+        session_data = self.active_sessions[user_id]
+        language = session_data['language']
+        
+        try:
+            # Показываем сообщение об окончании обсуждения
+            if language == 'ru':
+                end_text = (
+                    "🏁 **Обсуждение завершено!**\n\n"
+                    "Спасибо за ваши размышления. Теперь пришло время принять финальное решение.\n\n"
+                    "Выберите ваш окончательный выбор:"
+                )
+                confess_text = "🔓 Признаться"
+                silent_text = "🔒 Молчать"
+            else:
+                end_text = (
+                    "🏁 **Discussion Ended!**\n\n"
+                    "Thank you for your thoughts. Now it's time to make your final decision.\n\n"
+                    "Choose your final choice:"
+                )
+                confess_text = "🔓 Confess"
+                silent_text = "🔒 Stay Silent"
+            
+            # Создаем кнопки для финального решения
+            keyboard = [
+                [InlineKeyboardButton(confess_text, callback_data=f"final_decision_confess_{user_id}")],
+                [InlineKeyboardButton(silent_text, callback_data=f"final_decision_silent_{user_id}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                end_text,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+            
+            # Отменяем все активные таймеры для этого пользователя
+            if hasattr(context, 'job_queue') and context.job_queue:
+                # Отменяем таймер завершения эксперимента
+                for job in context.job_queue.jobs():
+                    if hasattr(job, 'data') and job.data and job.data.get('user_id') == user_id:
+                        job.schedule_removal()
+                
+                logger.info(f"Таймеры отменены для пользователя {user_id}")
+                
+        except Exception as e:
+            logger.error(f"Ошибка при завершении обсуждения: {e}")
+            try:
+                await query.edit_message_text("❌ Произошла ошибка при завершении обсуждения.")
+            except Exception as e2:
+                logger.warning(f"Не удалось отредактировать сообщение об ошибке: {e2}")
+    
+    async def _update_time_counter(self, context: ContextTypes.DEFAULT_TYPE):
+        """Обновляет счетчик времени в сообщении"""
+        user_id = context.job.data['user_id']
+        
+        if user_id not in self.active_sessions:
+            return
+        
+        session_data = self.active_sessions[user_id]
+        
+        if 'discussion_start_time' not in session_data:
+            return
+        
+        try:
+            # Вычисляем оставшееся время
+            elapsed = datetime.now() - session_data['discussion_start_time']
+            remaining = timedelta(minutes=5) - elapsed
+            
+            if remaining.total_seconds() <= 0:
+                # Время истекло, завершаем обсуждение
+                await self._end_experiment_timer(context)
+                return
+            
+            # Форматируем время
+            minutes = int(remaining.total_seconds() // 60)
+            seconds = int(remaining.total_seconds() % 60)
+            time_str = f"{minutes}:{seconds:02d}"
+            
+            # Обновляем сообщение с новым временем
+            if session_data['language'] == 'ru':
+                discussion_text = (
+                    "🎯 **Обсуждение началось!**\n\n"
+                    "Теперь у вас есть 5 минут, чтобы поделиться своими мыслями о дилемме заключенного. "
+                    "Расскажите, что бы вы выбрали и почему.\n\n"
+                    f"⏰ **Время:** {time_str}"
+                )
+                end_button_text = "🏁 Завершить обсуждение"
+            else:
+                discussion_text = (
+                    "🎯 **Discussion Started!**\n\n"
+                    "You now have 5 minutes to share your thoughts about the prisoner's dilemma. "
+                    "Tell us what you would choose and why.\n\n"
+                    f"⏰ **Time:** {time_str}"
+                )
+                end_button_text = "🏁 End Discussion"
+            
+            # Создаем кнопку "Завершить обсуждение"
+            keyboard = [[InlineKeyboardButton(end_button_text, callback_data=f"end_discussion_{user_id}")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # Пытаемся обновить сообщение
+            try:
+                # Находим последнее сообщение с таймером и обновляем его
+                # Для этого нужно сохранить message_id в session_data
+                if 'timer_message_id' in session_data:
+                    await context.bot.edit_message_text(
+                        chat_id=user_id,
+                        message_id=session_data['timer_message_id'],
+                        text=discussion_text,
+                        parse_mode='Markdown',
+                        reply_markup=reply_markup
+                    )
+            except Exception as e:
+                logger.warning(f"Не удалось обновить счетчик времени: {e}")
+                
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении счетчика времени: {e}")
     
     async def handle_user_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает сообщения пользователя с LLM анализом"""
@@ -191,8 +408,21 @@ class LLMExperimentHandler:
             )
             return
         
+        session_data = self.active_sessions[user_id]
+        
+        # Проверяем, началось ли обсуждение
+        if 'discussion_start_time' not in session_data:
+            if session_data['language'] == 'ru':
+                await update.message.reply_text(
+                    "Пожалуйста, сначала нажмите кнопку 'Начать обсуждение' в предыдущем сообщении."
+                )
+            else:
+                await update.message.reply_text(
+                    "Please first click the 'Start Discussion' button in the previous message."
+                )
+            return
+        
         try:
-            session_data = self.active_sessions[user_id]
             
             # Проверяем команды досрочного завершения
             if user_message.lower() in ['/end', '/finish', '/stop', 'завершить', 'закончить', 'стоп', 'хватит']:
@@ -215,11 +445,11 @@ class LLMExperimentHandler:
                 'sender': 'user'
             })
             
-            # Показываем динамичный индикатор "Печатаю..."
-            typing_message = await update.message.reply_text("🤔 Печатаю...")
+            # Показываем анимированную иконку многоточия
+            typing_message = await update.message.reply_text("⏳")
             
-            # Запускаем анимацию индикатора
-            animation_task = asyncio.create_task(self._animate_typing_indicator(typing_message))
+            # Запускаем анимацию многоточия
+            animation_task = asyncio.create_task(self._animate_dots_indicator(typing_message))
             
             # Анализируем сообщение с помощью LLM
             context_for_analysis = {
@@ -351,8 +581,8 @@ class LLMExperimentHandler:
             
             # Анализируем финальное состояние разговора
             if self.conversation_history[user_id]:
-                # Показываем динамичный индикатор "Анализирую..."
-                typing_message = await update.message.reply_text("📊 Анализирую разговор...")
+                # Показываем анимированную иконку анализа
+                typing_message = await update.message.reply_text("📊")
                 
                 # Запускаем анимацию индикатора
                 animation_task = asyncio.create_task(self._animate_analysis_indicator(typing_message))
@@ -402,9 +632,7 @@ class LLMExperimentHandler:
                 "• Если вы **молчите**, а партнер признается → вы получите 10 лет, партнер 1 год\n"
                 "• Если **оба признаетесь** → каждый получит по 5 лет\n"
                 "• Если **оба молчите** → каждый получит по 2 года\n\n"
-                "В течение 5 минут мы обсудим эту ситуацию. "
-                "Поделитесь своими мыслями о том, что бы вы выбрали и почему.\n\n"
-                "💡 **Для досрочного завершения:** напишите 'завершить', 'стоп' или '/end'"
+                "Когда будете готовы, нажмите кнопку ниже, чтобы начать 5-минутное обсуждение этой ситуации."
             )
         else:
             return (
@@ -415,9 +643,7 @@ class LLMExperimentHandler:
                 "• If you **stay silent** and partner confesses → you get 10 years, partner gets 1 year\n"
                 "• If **both confess** → each gets 5 years\n"
                 "• If **both stay silent** → each gets 2 years\n\n"
-                "For the next 5 minutes, we'll discuss this situation. "
-                "Please share your thoughts on what you would choose and why.\n\n"
-                "💡 **To end early:** type 'finish', 'stop' or '/end'"
+                "When you're ready, click the button below to start the 5-minute discussion of this situation."
             )
     
     def _get_standard_response(self, group: str, language: str, analysis: Dict) -> str:
@@ -486,24 +712,24 @@ class LLMExperimentHandler:
         
         await update.message.reply_text(status_text)
     
-    async def _animate_typing_indicator(self, message):
-        """Анимирует индикатор 'Печатаю...'"""
-        typing_indicators = [
-            "🤔 Печатаю...",
-            "🤔 Печатаю..",
-            "🤔 Печатаю.",
-            "🤔 Печатаю",
-            "🤔 Печатаю.",
-            "🤔 Печатаю..",
-            "🤔 Печатаю..."
+    async def _animate_dots_indicator(self, message):
+        """Анимирует индикатор многоточия"""
+        dots_indicators = [
+            "⏳",
+            "⏳.",
+            "⏳..",
+            "⏳...",
+            "⏳..",
+            "⏳.",
+            "⏳"
         ]
         
         try:
             while True:
-                for indicator in typing_indicators:
+                for indicator in dots_indicators:
                     try:
                         await message.edit_text(indicator)
-                        await asyncio.sleep(0.5)
+                        await asyncio.sleep(0.4)
                     except Exception as e:
                         # Игнорируем ошибки редактирования (например, если сообщение было удалено)
                         break
@@ -512,15 +738,15 @@ class LLMExperimentHandler:
             pass
     
     async def _animate_analysis_indicator(self, message):
-        """Анимирует индикатор 'Анализирую разговор...'"""
+        """Анимирует индикатор анализа многоточием"""
         analysis_indicators = [
-            "📊 Анализирую разговор...",
-            "📊 Анализирую разговор..",
-            "📊 Анализирую разговор.",
-            "📊 Анализирую разговор",
-            "📊 Анализирую разговор.",
-            "📊 Анализирую разговор..",
-            "📊 Анализирую разговор..."
+            "📊",
+            "📊.",
+            "📊..",
+            "📊...",
+            "📊..",
+            "📊.",
+            "📊"
         ]
         
         try:
@@ -528,7 +754,7 @@ class LLMExperimentHandler:
                 for indicator in analysis_indicators:
                     try:
                         await message.edit_text(indicator)
-                        await asyncio.sleep(0.6)
+                        await asyncio.sleep(0.4)
                     except Exception as e:
                         # Игнорируем ошибки редактирования (например, если сообщение было удалено)
                         break
@@ -576,7 +802,11 @@ class LLMExperimentHandler:
     async def handle_final_decision(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает финальное решение пользователя"""
         query = update.callback_query
-        await query.answer()
+        
+        try:
+            await query.answer()
+        except Exception as e:
+            logger.warning(f"Не удалось ответить на callback query в финальном решении: {e}")
         
         user_id = query.from_user.id
         callback_data = query.data
@@ -593,7 +823,10 @@ class LLMExperimentHandler:
             return
         
         if user_id not in self.active_sessions:
-            await query.edit_message_text("❌ Сессия не найдена.")
+            try:
+                await query.edit_message_text("❌ Сессия не найдена.")
+            except Exception as e:
+                logger.warning(f"Не удалось отредактировать сообщение: {e}")
             return
         
         session_data = self.active_sessions[user_id]
@@ -640,7 +873,15 @@ class LLMExperimentHandler:
                     f"The experiment is complete. Your data will be used for scientific research."
                 )
             
-            await query.edit_message_text(thank_you_text, parse_mode='Markdown')
+            try:
+                await query.edit_message_text(thank_you_text, parse_mode='Markdown')
+            except Exception as e:
+                logger.warning(f"Не удалось отредактировать сообщение с благодарностью: {e}")
+                # Отправляем новое сообщение если не удалось отредактировать
+                try:
+                    await context.bot.send_message(chat_id=user_id, text=thank_you_text, parse_mode='Markdown')
+                except Exception as e2:
+                    logger.error(f"Не удалось отправить сообщение с благодарностью: {e2}")
             
             # Показываем опрос
             try:
@@ -659,4 +900,12 @@ class LLMExperimentHandler:
                 
         except Exception as e:
             logger.error(f"Ошибка при обработке финального решения: {e}")
-            await query.edit_message_text("❌ Произошла ошибка. Попробуйте еще раз.")
+            try:
+                await query.edit_message_text("❌ Произошла ошибка. Попробуйте еще раз.")
+            except Exception as e2:
+                logger.warning(f"Не удалось отредактировать сообщение об ошибке: {e2}")
+                # Отправляем новое сообщение если не удалось отредактировать
+                try:
+                    await context.bot.send_message(chat_id=user_id, text="❌ Произошла ошибка. Попробуйте еще раз.")
+                except Exception as e3:
+                    logger.error(f"Не удалось отправить сообщение об ошибке: {e3}")

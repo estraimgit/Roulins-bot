@@ -117,13 +117,24 @@ class LLMPrisonersDilemmaBot:
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик callback запросов"""
         query = update.callback_query
-        await query.answer()
+        
+        try:
+            await query.answer()
+        except Exception as e:
+            logger.warning(f"Не удалось ответить на callback query: {e}")
+            # Продолжаем обработку даже если не удалось ответить на query
         
         data = query.data
         
         if data.startswith('lang_'):
             # Обрабатываем выбор языка
             await self.experiment_handler.handle_language_selection(update, context)
+        elif data.startswith('start_discussion_'):
+            # Обрабатываем начало обсуждения
+            await self.experiment_handler.handle_start_discussion(update, context)
+        elif data.startswith('end_discussion_'):
+            # Обрабатываем завершение обсуждения
+            await self.experiment_handler.handle_end_discussion(update, context)
         elif data.startswith('survey_'):
             # Обрабатываем ответы на опрос
             await self.survey_handler.handle_survey_response(update, context)
@@ -131,7 +142,10 @@ class LLMPrisonersDilemmaBot:
             # Обрабатываем финальное решение
             await self.experiment_handler.handle_final_decision(update, context)
         else:
-            await query.edit_message_text("Неизвестная команда.")
+            try:
+                await query.edit_message_text("Неизвестная команда.")
+            except Exception as e:
+                logger.warning(f"Не удалось отредактировать сообщение: {e}")
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик текстовых сообщений"""

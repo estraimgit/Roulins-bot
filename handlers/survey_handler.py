@@ -113,10 +113,19 @@ class SurveyHandler:
     async def handle_survey_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает ответы на опрос"""
         query = update.callback_query
+        
+        try:
+            await query.answer()
+        except Exception as e:
+            logger.warning(f"Не удалось ответить на callback query: {e}")
+        
         user_id = update.effective_user.id
         
         if user_id not in self.survey_sessions:
-            await query.answer("Сессия опроса не найдена.")
+            try:
+                await query.edit_message_text("❌ Сессия опроса не найдена.")
+            except Exception as e:
+                logger.warning(f"Не удалось отредактировать сообщение: {e}")
             return
         
         survey_data = self.survey_sessions[user_id]
@@ -137,10 +146,13 @@ class SurveyHandler:
         # Переходим к следующему вопросу
         survey_data['current_question'] += 1
         
+        logger.info(f"Обработан ответ на вопрос {question_num}: {answer}, переходим к вопросу {survey_data['current_question']}")
+        
         if survey_data['current_question'] <= 4:
             await self._show_question(update, context, survey_data)
         else:
             # Завершаем опрос
+            logger.info(f"Завершаем опрос для участника {survey_data['participant_id']}")
             await self._complete_survey(update, context, survey_data)
     
     async def _handle_text_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
@@ -163,6 +175,8 @@ class SurveyHandler:
         language = survey_data['language']
         responses = survey_data['responses']
         
+        logger.info(f"Завершаем опрос для участника {participant_id}, ответы: {responses}")
+        
         # Подготавливаем данные для сохранения
         survey_responses = {
             'question_1': responses.get('question_1'),
@@ -172,25 +186,39 @@ class SurveyHandler:
         }
         
         # Сохраняем в базу данных
-        self.db.save_survey_response(participant_id, survey_responses)
+        try:
+            self.db.save_survey_response(participant_id, survey_responses)
+            logger.info(f"Ответы опроса сохранены для участника {participant_id}")
+        except Exception as e:
+            logger.error(f"Ошибка сохранения ответов опроса: {e}")
         
         # Показываем благодарность
         texts = COMMON_TEXTS.get(language, COMMON_TEXTS['en'])
         thank_you_message = texts['thank_you']
         
+        logger.info(f"Показываем благодарность: {thank_you_message}")
+        
         try:
             if hasattr(update, 'callback_query') and update.callback_query:
+                logger.info("Редактируем сообщение с благодарностью")
                 await update.callback_query.edit_message_text(thank_you_message)
             else:
+                logger.info("Отправляем новое сообщение с благодарностью")
                 await update.message.reply_text(thank_you_message)
         except Exception as e:
             logger.error(f"Ошибка отправки благодарности: {e}")
             # Пытаемся отправить новое сообщение
             try:
                 user_id = update.effective_user.id
+                logger.info(f"Пытаемся отправить сообщение пользователю {user_id}")
                 await context.bot.send_message(chat_id=user_id, text=thank_you_message)
             except Exception as e2:
                 logger.error(f"Критическая ошибка отправки сообщения: {e2}")
+                # Последняя попытка - отправляем простое сообщение
+                try:
+                    await context.bot.send_message(chat_id=user_id, text="✅ Спасибо за участие в эксперименте!")
+                except Exception as e3:
+                    logger.error(f"Финальная ошибка отправки сообщения: {e3}")
         
         # Удаляем сессию опроса
         user_id = update.effective_user.id
