@@ -333,61 +333,14 @@ class LLMExperimentHandler:
             context.job.schedule_removal()
 
     async def _end_experiment_timer(self, context: ContextTypes.DEFAULT_TYPE):
-        """Завершает эксперимент по таймеру"""
+        """Показывает финальное решение по истечении времени"""
         user_id = context.job.data['user_id']
         
         if user_id in self.active_sessions:
             session_data = self.active_sessions[user_id]
             
-            # Анализируем финальное состояние разговора
-            if user_id in self.conversation_history and self.conversation_history[user_id]:
-                final_analysis = self.llm_analyzer.analyze_conversation_flow(
-                    self.conversation_history[user_id]
-                )
-                
-                await self.db.log_final_conversation_analysis(
-                    participant_id=session_data['participant_id'],
-                    final_analysis=final_analysis
-                )
-            
-            # Записываем завершение эксперимента
-            await self.db.log_experiment_completion(
-                participant_id=session_data['participant_id'],
-                end_time=datetime.now(),
-                total_messages=session_data['message_count']
-            )
-            
-            # Отправляем сообщение о завершении
-            if session_data['language'] == 'ru':
-                end_message = "⏰ Время эксперимента истекло! Спасибо за участие."
-            else:
-                end_message = "⏰ Experiment time is up! Thank you for participating."
-            
-            try:
-                await context.bot.send_message(chat_id=user_id, text=end_message)
-            except Exception as e:
-                logger.error(f"Ошибка при отправке сообщения о завершении: {e}")
-            
-            # Показываем опрос
-            try:
-                # Создаем фиктивный update для опроса
-                from telegram import Update
-                fake_update = Update(update_id=0)
-                fake_update.effective_user = type('obj', (object,), {'id': user_id})()
-                fake_update.effective_chat = type('obj', (object,), {'id': user_id})()
-                
-                await self.survey_handler.start_survey(
-                    fake_update, context, 
-                    session_data['participant_id'], 
-                    session_data['language']
-                )
-            except Exception as e:
-                logger.error(f"Ошибка при запуске опроса: {e}")
-            
-            # Очищаем сессию
-            del self.active_sessions[user_id]
-            if user_id in self.conversation_history:
-                del self.conversation_history[user_id]
+            # Показываем сообщение о истечении времени и кнопки для финального решения
+            await self._show_final_decision(context.bot, user_id, session_data)
             
             logger.info(f"Эксперимент завершен по таймеру для пользователя {user_id}")
 
@@ -582,3 +535,128 @@ class LLMExperimentHandler:
         except asyncio.CancelledError:
             # Задача была отменена - это нормально
             pass
+    
+    async def _show_final_decision(self, bot, user_id: int, session_data: Dict):
+        """Показывает финальное решение с кнопками"""
+        try:
+            if session_data['language'] == 'ru':
+                message_text = (
+                    "⏰ **Время эксперимента истекло!**\n\n"
+                    "Теперь вам нужно принять финальное решение в дилемме заключенного.\n\n"
+                    "Выберите ваш окончательный выбор:"
+                )
+                confess_text = "🔓 Признаться"
+                silent_text = "🔒 Молчать"
+            else:
+                message_text = (
+                    "⏰ **Experiment time is up!**\n\n"
+                    "Now you need to make your final decision in the prisoner's dilemma.\n\n"
+                    "Choose your final choice:"
+                )
+                confess_text = "🔓 Confess"
+                silent_text = "🔒 Stay Silent"
+            
+            # Создаем кнопки
+            keyboard = [
+                [InlineKeyboardButton(confess_text, callback_data=f"final_decision_confess_{user_id}")],
+                [InlineKeyboardButton(silent_text, callback_data=f"final_decision_silent_{user_id}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await bot.send_message(
+                chat_id=user_id,
+                text=message_text,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+            
+        except Exception as e:
+            logger.error(f"Ошибка при показе финального решения: {e}")
+    
+    async def handle_final_decision(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обрабатывает финальное решение пользователя"""
+        query = update.callback_query
+        await query.answer()
+        
+        user_id = query.from_user.id
+        callback_data = query.data
+        
+        if not callback_data.startswith("final_decision_"):
+            return
+        
+        # Извлекаем решение
+        if "confess" in callback_data:
+            decision = "confess"
+        elif "silent" in callback_data:
+            decision = "silent"
+        else:
+            return
+        
+        if user_id not in self.active_sessions:
+            await query.edit_message_text("❌ Сессия не найдена.")
+            return
+        
+        session_data = self.active_sessions[user_id]
+        
+        try:
+            # Записываем финальное решение
+            await self.db.log_final_decision(
+                participant_id=session_data['participant_id'],
+                decision=decision,
+                decision_time=datetime.now()
+            )
+            
+            # Анализируем финальное состояние разговора
+            if user_id in self.conversation_history and self.conversation_history[user_id]:
+                final_analysis = self.llm_analyzer.analyze_conversation_flow(
+                    self.conversation_history[user_id]
+                )
+                
+                await self.db.log_final_conversation_analysis(
+                    participant_id=session_data['participant_id'],
+                    final_analysis=final_analysis
+                )
+            
+            # Записываем завершение эксперимента
+            await self.db.log_experiment_completion(
+                participant_id=session_data['participant_id'],
+                end_time=datetime.now(),
+                total_messages=session_data['message_count']
+            )
+            
+            # Показываем благодарность
+            if session_data['language'] == 'ru':
+                decision_text = "признались" if decision == "confess" else "решили молчать"
+                thank_you_text = (
+                    f"✅ **Спасибо за участие в эксперименте!**\n\n"
+                    f"Ваше финальное решение: **{decision_text}**\n\n"
+                    f"Эксперимент завершен. Ваши данные будут использованы для научного исследования."
+                )
+            else:
+                decision_text = "confessed" if decision == "confess" else "chose to stay silent"
+                thank_you_text = (
+                    f"✅ **Thank you for participating in the experiment!**\n\n"
+                    f"Your final decision: **{decision_text}**\n\n"
+                    f"The experiment is complete. Your data will be used for scientific research."
+                )
+            
+            await query.edit_message_text(thank_you_text, parse_mode='Markdown')
+            
+            # Показываем опрос
+            try:
+                await self.survey_handler.start_survey(
+                    update, context, 
+                    session_data['participant_id'], 
+                    session_data['language']
+                )
+            except Exception as e:
+                logger.error(f"Ошибка при запуске опроса: {e}")
+            
+            # Очищаем сессию
+            del self.active_sessions[user_id]
+            if user_id in self.conversation_history:
+                del self.conversation_history[user_id]
+                
+        except Exception as e:
+            logger.error(f"Ошибка при обработке финального решения: {e}")
+            await query.edit_message_text("❌ Произошла ошибка. Попробуйте еще раз.")

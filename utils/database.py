@@ -46,9 +46,17 @@ class DatabaseManager:
                         start_time TIMESTAMP,
                         end_time TIMESTAMP,
                         final_decision TEXT,
+                        decision_time TIMESTAMP,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
+                
+                # Добавляем поле decision_time если его нет
+                try:
+                    cursor.execute("ALTER TABLE participants ADD COLUMN decision_time TIMESTAMP")
+                except sqlite3.OperationalError:
+                    # Поле уже существует
+                    pass
                 
                 # Таблица сообщений чата
                 cursor.execute('''
@@ -400,3 +408,19 @@ class DatabaseManager:
                 
         except Exception as e:
             logger.error(f"Ошибка при логировании завершения эксперимента: {e}")
+    
+    async def log_final_decision(self, participant_id: str, decision: str, decision_time):
+        """Логирует финальное решение участника"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE participants 
+                    SET final_decision = ?, decision_time = ?
+                    WHERE participant_id = ?
+                """, (decision, decision_time, participant_id))
+                conn.commit()
+                logger.info(f"Финальное решение '{decision}' записано для участника {participant_id}")
+                
+        except Exception as e:
+            logger.error(f"Ошибка при логировании финального решения: {e}")

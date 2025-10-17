@@ -127,6 +127,9 @@ class LLMPrisonersDilemmaBot:
         elif data.startswith('survey_'):
             # Обрабатываем ответы на опрос
             await self.survey_handler.handle_survey_response(update, context)
+        elif data.startswith('final_decision_'):
+            # Обрабатываем финальное решение
+            await self.experiment_handler.handle_final_decision(update, context)
         else:
             await query.edit_message_text("Неизвестная команда.")
     
