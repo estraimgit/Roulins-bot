@@ -445,11 +445,8 @@ class LLMExperimentHandler:
                 'sender': 'user'
             })
             
-            # Показываем анимированный индикатор печати
-            typing_message = await update.message.reply_text("✍️")
-            
-            # Запускаем анимацию многоточия
-            animation_task = asyncio.create_task(self._animate_dots_indicator(typing_message))
+            # Показываем сообщение о подготовке ответа
+            typing_message = await update.message.reply_text("Пишу ответ...")
             
             # Анализируем сообщение с помощью LLM
             context_for_analysis = {
@@ -460,9 +457,6 @@ class LLMExperimentHandler:
             }
             
             analysis = self.llm_analyzer.analyze_message(user_message, context_for_analysis)
-            
-            # Останавливаем анимацию
-            animation_task.cancel()
             
             # Генерируем персонализированный ответ с учетом истории разговора
             if self.llm_analyzer.api_key and analysis.get('analysis_method') != 'basic':
@@ -581,11 +575,8 @@ class LLMExperimentHandler:
             
             # Анализируем финальное состояние разговора
             if self.conversation_history[user_id]:
-                # Показываем анимированный индикатор анализа
-                typing_message = await update.message.reply_text("📝")
-                
-                # Запускаем анимацию индикатора
-                animation_task = asyncio.create_task(self._animate_analysis_indicator(typing_message))
+                # Показываем сообщение об анализе
+                typing_message = await update.message.reply_text("Анализирую разговор...")
                 
                 final_analysis = self.llm_analyzer.analyze_conversation_flow(
                     self.conversation_history[user_id]
@@ -596,8 +587,7 @@ class LLMExperimentHandler:
                     final_analysis=final_analysis
                 )
                 
-                # Останавливаем анимацию и удаляем индикатор
-                animation_task.cancel()
+                # Удаляем сообщение об анализе
                 await typing_message.delete()
             
             # Записываем завершение эксперимента
