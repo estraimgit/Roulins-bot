@@ -214,6 +214,9 @@ class LLMExperimentHandler:
                 'sender': 'user'
             })
             
+            # Показываем индикатор "Печатаю..."
+            typing_message = await update.message.reply_text("🤔 Печатаю...")
+            
             # Анализируем сообщение с помощью LLM
             context_for_analysis = {
                 'group': session_data['group'],
@@ -240,7 +243,8 @@ class LLMExperimentHandler:
                     )
                 )
             
-            # Отправляем ответ
+            # Удаляем индикатор "Печатаю..." и отправляем ответ
+            await typing_message.delete()
             await update.message.reply_text(bot_response)
             
             # Добавляем ответ бота в историю
@@ -387,6 +391,9 @@ class LLMExperimentHandler:
             
             # Анализируем финальное состояние разговора
             if self.conversation_history[user_id]:
+                # Показываем индикатор "Анализирую..."
+                typing_message = await update.message.reply_text("📊 Анализирую разговор...")
+                
                 final_analysis = self.llm_analyzer.analyze_conversation_flow(
                     self.conversation_history[user_id]
                 )
@@ -395,6 +402,9 @@ class LLMExperimentHandler:
                     participant_id=session_data['participant_id'],
                     final_analysis=final_analysis
                 )
+                
+                # Удаляем индикатор
+                await typing_message.delete()
             
             # Записываем завершение эксперимента
             await self.db.log_experiment_completion(
