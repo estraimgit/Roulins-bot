@@ -133,12 +133,22 @@ class LLMPrisonersDilemmaBot:
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик текстовых сообщений"""
         user_id = update.effective_user.id
+        message_text = update.message.text
         
         # Проверяем, не находится ли пользователь в процессе опроса
         if user_id in self.survey_handler.survey_sessions:
             survey_data = self.survey_handler.survey_sessions[user_id]
             if survey_data.get('waiting_for_text', False):
                 await self.survey_handler.handle_survey_response(update, context)
+                return
+        
+        # Проверяем команды завершения эксперимента
+        if message_text.lower() in ['/end', '/finish', '/stop', 'завершить', 'закончить', 'стоп', 'хватит']:
+            if user_id in self.experiment_handler.active_sessions:
+                await self.experiment_handler._end_experiment(update, context, user_id)
+                return
+            else:
+                await update.message.reply_text("Вы не участвуете в эксперименте. Используйте /start для начала.")
                 return
         
         # Обычная обработка сообщений эксперимента
@@ -158,7 +168,7 @@ class LLMPrisonersDilemmaBot:
         application.add_handler(CommandHandler("llm_status", self.llm_status_command))
         application.add_handler(CommandHandler("admin", self.admin_command))
         application.add_handler(CallbackQueryHandler(self.handle_callback))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+        application.add_handler(MessageHandler(filters.TEXT, self.handle_message))
         
         # Запускаем бота
         application.run_polling(allowed_updates=Update.ALL_TYPES)
@@ -177,7 +187,7 @@ class LLMPrisonersDilemmaBot:
         application.add_handler(CommandHandler("llm_status", self.llm_status_command))
         application.add_handler(CommandHandler("admin", self.admin_command))
         application.add_handler(CallbackQueryHandler(self.handle_callback))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+        application.add_handler(MessageHandler(filters.TEXT, self.handle_message))
         
         # Настраиваем webhook
         if self.config.WEBHOOK_URL:

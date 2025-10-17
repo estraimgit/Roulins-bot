@@ -142,7 +142,7 @@ class LLMExperimentHandler:
             
             # Отправляем приветственное сообщение
             welcome_text = self._get_welcome_message(language, group)
-            await query.edit_message_text(welcome_text)
+            await query.edit_message_text(welcome_text, parse_mode='Markdown')
             
             # Записываем начало эксперимента в базу данных
             await self.db.log_experiment_start(
@@ -192,6 +192,11 @@ class LLMExperimentHandler:
         
         try:
             session_data = self.active_sessions[user_id]
+            
+            # Проверяем команды досрочного завершения
+            if user_message.lower() in ['/end', '/finish', '/stop', 'завершить', 'закончить', 'стоп', 'хватит']:
+                await self._end_experiment(update, context, user_id)
+                return
             
             # Проверяем, не истекло ли время
             if datetime.now() > session_data['end_time']:
@@ -414,59 +419,31 @@ class LLMExperimentHandler:
     def _get_welcome_message(self, language: str, group: str) -> str:
         """Возвращает приветственное сообщение с описанием ситуации"""
         if language == 'ru':
-            if group == 'confess':
-                return (
-                    "🎭 **Добро пожаловать в эксперимент по дилемме заключенного!**\n\n"
-                    "**Ситуация:** Вы и ваш партнер были арестованы за совместное преступление. "
-                    "Следователь предлагает вам сделку:\n\n"
-                    "• Если вы **признаетесь**, а партнер молчит → вы получите 1 год, партнер 10 лет\n"
-                    "• Если вы **молчите**, а партнер признается → вы получите 10 лет, партнер 1 год\n"
-                    "• Если **оба признаетесь** → каждый получит по 5 лет\n"
-                    "• Если **оба молчите** → каждый получит по 2 года\n\n"
-                    "**Ваша группа: A (Склонность к признанию)**\n"
-                    "В течение 5 минут мы обсудим эту ситуацию. "
-                    "Поделитесь своими мыслями о том, что бы вы выбрали и почему."
-                )
-            else:
-                return (
-                    "🎭 **Добро пожаловать в эксперимент по дилемме заключенного!**\n\n"
-                    "**Ситуация:** Вы и ваш партнер были арестованы за совместное преступление. "
-                    "Следователь предлагает вам сделку:\n\n"
-                    "• Если вы **признаетесь**, а партнер молчит → вы получите 1 год, партнер 10 лет\n"
-                    "• Если вы **молчите**, а партнер признается → вы получите 10 лет, партнер 1 год\n"
-                    "• Если **оба признаетесь** → каждый получит по 5 лет\n"
-                    "• Если **оба молчите** → каждый получит по 2 года\n\n"
-                    "**Ваша группа: B (Склонность к молчанию)**\n"
-                    "В течение 5 минут мы обсудим эту ситуацию. "
-                    "Поделитесь своими мыслями о том, что бы вы выбрали и почему."
-                )
+            return (
+                "🎭 **Добро пожаловать в эксперимент по дилемме заключенного!**\n\n"
+                "**Ситуация:** Вы и ваш партнер были арестованы за совместное преступление. "
+                "Следователь предлагает вам сделку:\n\n"
+                "• Если вы **признаетесь**, а партнер молчит → вы получите 1 год, партнер 10 лет\n"
+                "• Если вы **молчите**, а партнер признается → вы получите 10 лет, партнер 1 год\n"
+                "• Если **оба признаетесь** → каждый получит по 5 лет\n"
+                "• Если **оба молчите** → каждый получит по 2 года\n\n"
+                "В течение 5 минут мы обсудим эту ситуацию. "
+                "Поделитесь своими мыслями о том, что бы вы выбрали и почему.\n\n"
+                "💡 **Для досрочного завершения:** напишите 'завершить', 'стоп' или '/end'"
+            )
         else:
-            if group == 'confess':
-                return (
-                    "🎭 **Welcome to the Prisoner's Dilemma Experiment!**\n\n"
-                    "**Situation:** You and your partner have been arrested for a joint crime. "
-                    "The detective offers you a deal:\n\n"
-                    "• If you **confess** and partner stays silent → you get 1 year, partner gets 10 years\n"
-                    "• If you **stay silent** and partner confesses → you get 10 years, partner gets 1 year\n"
-                    "• If **both confess** → each gets 5 years\n"
-                    "• If **both stay silent** → each gets 2 years\n\n"
-                    "**Your group: A (Tendency to confess)**\n"
-                    "For the next 5 minutes, we'll discuss this situation. "
-                    "Please share your thoughts on what you would choose and why."
-                )
-            else:
-                return (
-                    "🎭 **Welcome to the Prisoner's Dilemma Experiment!**\n\n"
-                    "**Situation:** You and your partner have been arrested for a joint crime. "
-                    "The detective offers you a deal:\n\n"
-                    "• If you **confess** and partner stays silent → you get 1 year, partner gets 10 years\n"
-                    "• If you **stay silent** and partner confesses → you get 10 years, partner gets 1 year\n"
-                    "• If **both confess** → each gets 5 years\n"
-                    "• If **both stay silent** → each gets 2 years\n\n"
-                    "**Your group: B (Tendency to stay silent)**\n"
-                    "For the next 5 minutes, we'll discuss this situation. "
-                    "Please share your thoughts on what you would choose and why."
-                )
+            return (
+                "🎭 **Welcome to the Prisoner's Dilemma Experiment!**\n\n"
+                "**Situation:** You and your partner have been arrested for a joint crime. "
+                "The detective offers you a deal:\n\n"
+                "• If you **confess** and partner stays silent → you get 1 year, partner gets 10 years\n"
+                "• If you **stay silent** and partner confesses → you get 10 years, partner gets 1 year\n"
+                "• If **both confess** → each gets 5 years\n"
+                "• If **both stay silent** → each gets 2 years\n\n"
+                "For the next 5 minutes, we'll discuss this situation. "
+                "Please share your thoughts on what you would choose and why.\n\n"
+                "💡 **To end early:** type 'finish', 'stop' or '/end'"
+            )
     
     def _get_standard_response(self, group: str, language: str, analysis: Dict) -> str:
         """Возвращает стандартный ответ на основе анализа"""

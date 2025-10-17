@@ -110,19 +110,9 @@ ssh $SERVER << 'EOF'
     
     echo "Восстанавливаем важные настройки из backup..."
     if [ -f settings_backup.env ]; then
-        # Сначала восстанавливаем API ключ cloud.ru (критически важно!)
-        CLOUD_API_KEY=$(grep "^CLOUD_RU_API_KEY=" settings_backup.env | cut -d'=' -f2-)
-        if [ ! -z "$CLOUD_API_KEY" ]; then
-            sed -i "s|^CLOUD_RU_API_KEY=.*|CLOUD_RU_API_KEY=$CLOUD_API_KEY|" .env || echo "CLOUD_RU_API_KEY=$CLOUD_API_KEY" >> .env
-            echo "🔑 API ключ cloud.ru восстановлен"
-        fi
-        
-        # Затем остальные настройки
-        while IFS='=' read -r key value; do
-            if [[ ! -z "$key" && ! "$key" =~ ^# && "$key" != "CLOUD_RU_API_KEY" ]]; then
-                sed -i "s|^$key=.*|$key=$value|" .env || echo "$key=$value" >> .env
-            fi
-        done < settings_backup.env
+        echo "📋 Восстанавливаем настройки из settings_backup.env..."
+        # Добавляем все настройки из backup файла
+        cat settings_backup.env >> .env
         echo "✅ Настройки восстановлены из backup"
     else
         echo "⚠️ Backup файл не найден, используем сохраненные настройки"
