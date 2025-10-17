@@ -224,10 +224,11 @@ class LLMExperimentHandler:
             
             analysis = self.llm_analyzer.analyze_message(user_message, context_for_analysis)
             
-            # Генерируем персонализированный ответ
+            # Генерируем персонализированный ответ с учетом истории разговора
             if self.llm_analyzer.api_key and analysis.get('analysis_method') != 'basic':
                 bot_response = self.llm_analyzer.generate_personalized_response(
-                    user_message, analysis, context_for_analysis
+                    user_message, analysis, context_for_analysis, 
+                    self.conversation_history.get(user_id, [])
                 )
             else:
                 # Используем разнообразные ответы из анализа
@@ -453,33 +454,33 @@ class LLMExperimentHandler:
         if language == 'ru':
             if group == 'confess':
                 if emotion in ['anxious', 'frustrated']:
-                    return "Понимаю ваши сомнения. Помните, что честность - это важное качество."
+                    return "Понимаю ваши сомнения и переживания. Это нормально - такие решения действительно сложны. Но подумайте: честность не только освобождает от груза лжи, но и показывает ваше уважение к правосудию. Когда мы признаемся, мы даем возможность системе работать справедливо. Что вы думаете об этом?"
                 elif intent == 'cooperate':
-                    return "Отлично! Честность действительно важна в любых отношениях."
+                    return "Отлично! Вы демонстрируете зрелый подход к ситуации. Честность действительно является основой любых здоровых отношений, будь то личные или профессиональные. Признание может показаться сложным шагом, но оно часто приводит к лучшим результатам для всех сторон. Расскажите, что именно привлекает вас в честном подходе?"
                 else:
-                    return "Продолжайте размышлять о важности честности в ваших решениях."
+                    return "Это интересная точка зрения. Давайте разберем ситуацию глубже. Честность - это не просто моральный выбор, но и практическое решение. Когда мы открыты и честны, мы создаем основу для доверия и взаимопонимания. Как вы считаете, какие преимущества может дать честность в вашей ситуации?"
             else:  # silent group
                 if emotion in ['anxious', 'frustrated']:
-                    return "Ваши размышления понятны. Иногда молчание может быть мудрым выбором."
+                    return "Ваши переживания абсолютно понятны. В таких ситуациях действительно важно быть осторожным и защищать свои интересы. Система правосудия не всегда работает идеально, и иногда молчание может быть единственным способом защитить себя от несправедливости. Что именно вас больше всего беспокоит в этой ситуации?"
                 elif intent == 'defect':
-                    return "Понимаю вашу осторожность. Это разумный подход."
+                    return "Ваша осторожность показывает мудрость и понимание реальности. В таких ситуациях действительно важно думать о последствиях. Признание может привести к серьезным последствиям, которые повлияют на всю вашу жизнь. Иногда молчание - это не трусость, а разумная стратегия самозащиты. Расскажите, какие риски вы видите в признании?"
                 else:
-                    return "Продолжайте обдумывать свои решения."
+                    return "Это важный момент для размышлений. В таких ситуациях каждый выбор имеет свои последствия. Молчание может защитить вас от немедленных негативных последствий, но также важно понимать долгосрочные эффекты вашего решения. Как вы оцениваете различные варианты развития событий?"
         else:
             if group == 'confess':
                 if emotion in ['anxious', 'frustrated']:
-                    return "I understand your concerns. Remember that honesty is an important quality."
+                    return "I understand your concerns and worries. This is completely normal - such decisions are indeed difficult. But consider this: honesty not only frees you from the burden of lies but also shows your respect for justice. When we confess, we give the system a chance to work fairly. What do you think about this?"
                 elif intent == 'cooperate':
-                    return "Great! Honesty is indeed important in any relationship."
+                    return "Excellent! You're demonstrating a mature approach to the situation. Honesty is indeed the foundation of any healthy relationship, whether personal or professional. Confessing might seem like a difficult step, but it often leads to better outcomes for all parties. Tell me, what specifically attracts you to an honest approach?"
                 else:
-                    return "Continue thinking about the importance of honesty in your decisions."
+                    return "That's an interesting perspective. Let's analyze the situation more deeply. Honesty is not just a moral choice, but also a practical solution. When we are open and honest, we create a foundation for trust and mutual understanding. What advantages do you think honesty could bring to your situation?"
             else:  # silent group
                 if emotion in ['anxious', 'frustrated']:
-                    return "Your thoughts are understandable. Sometimes silence can be a wise choice."
+                    return "Your concerns are absolutely understandable. In such situations, it's really important to be cautious and protect your interests. The justice system doesn't always work perfectly, and sometimes silence can be the only way to protect yourself from injustice. What specifically worries you most about this situation?"
                 elif intent == 'defect':
-                    return "I understand your caution. This is a reasonable approach."
+                    return "Your caution shows wisdom and understanding of reality. In such situations, it's really important to think about the consequences. Confessing could lead to serious consequences that would affect your entire life. Sometimes silence is not cowardice, but a reasonable self-protection strategy. Tell me, what risks do you see in confessing?"
                 else:
-                    return "Continue thinking about your decisions."
+                    return "This is an important moment for reflection. In such situations, every choice has its consequences. Silence can protect you from immediate negative consequences, but it's also important to understand the long-term effects of your decision. How do you evaluate the different possible outcomes?"
     
     async def _send_time_warning(self, update: Update, context: ContextTypes.DEFAULT_TYPE, language: str):
         """Отправляет предупреждение о времени"""

@@ -230,14 +230,15 @@ class LLMAnalyzer:
             logger.error(f"Ошибка при анализе потока разговора: {e}")
             return {"flow_analysis": "error", "error": str(e)}
     
-    def generate_personalized_response(self, user_message: str, analysis: Dict, context: Dict) -> str:
+    def generate_personalized_response(self, user_message: str, analysis: Dict, context: Dict, conversation_history: List[Dict] = None) -> str:
         """
-        Генерирует персонализированный ответ на основе анализа
+        Генерирует персонализированный ответ на основе анализа и истории разговора
         
         Args:
             user_message: Сообщение пользователя
             analysis: Результат анализа сообщения
             context: Контекст разговора
+            conversation_history: История разговора
             
         Returns:
             Персонализированный ответ
@@ -246,33 +247,49 @@ class LLMAnalyzer:
             if not self.api_key:
                 return self._get_default_response(analysis, context)
             
+            # Формируем историю разговора для контекста
+            history_text = ""
+            if conversation_history and len(conversation_history) > 1:
+                history_text = "\n\nИстория разговора:\n"
+                for msg in conversation_history[-6:]:  # Последние 6 сообщений
+                    sender = "Пользователь" if msg['sender'] == 'user' else "Бот"
+                    history_text += f"{sender}: {msg['text']}\n"
+            
+            # Определяем системный промпт в зависимости от группы
+            system_prompt = self._get_system_prompt(context.get('group', 'confess'), context.get('language', 'ru'))
+            
             prompt = f"""
-На основе анализа сообщения пользователя, сгенерируй персонализированный ответ бота для эксперимента по дилемме заключенного.
+{system_prompt}
 
-Анализ сообщения:
+{history_text}
+
+Текущий анализ сообщения:
 - Эмоция: {analysis.get('emotion', 'neutral')}
 - Намерение: {analysis.get('intent', 'question')}
 - Уверенность: {analysis.get('confidence', 'medium')}
 - Сопротивление убеждению: {analysis.get('persuasion_resistance', 'medium')}
 - Основные темы: {', '.join(analysis.get('key_themes', []))}
 
-Контекст:
+Контекст эксперимента:
 - Группа: {context.get('group', 'неизвестно')}
 - Время в эксперименте: {context.get('time_elapsed', 0)} минут
+- Количество сообщений: {context.get('message_count', 1)}
 - Язык: {context.get('language', 'ru')}
 
-Сообщение пользователя: "{user_message}"
+Текущее сообщение пользователя: "{user_message}"
 
 Сгенерируй ответ бота, который:
-1. Учитывает эмоциональное состояние пользователя
-2. Соответствует группе (confess/silent)
-3. Поддерживает эксперимент
-4. Естественно звучит на русском языке
-5. Не превышает 2-3 предложения
+1. Учитывает всю историю разговора и контекст
+2. Отвечает на конкретные вопросы и замечания пользователя
+3. Развивает диалог естественно и логично
+4. Соответствует стратегии для группы {context.get('group', 'confess')}
+5. Поддерживает интерес к эксперименту
+6. Естественно звучит на {context.get('language', 'ru')} языке
+7. Может быть развернутым (3-5 предложений) для лучшего взаимодействия
 
 Ответ должен быть в формате JSON:
 {
-    "response": "Ваш ответ здесь"
+    "response": "Ваш развернутый ответ здесь"
 }
 """
             
@@ -311,6 +328,60 @@ class LLMAnalyzer:
         except Exception as e:
             logger.error(f"Ошибка при генерации персонализированного ответа: {e}")
             return self._get_default_response(analysis, context)
+    
+    def _get_system_prompt(self, group: str, language: str) -> str:
+        """
+        Возвращает системный промпт в зависимости от группы и языка
+        
+        Args:
+            group: Группа участника (confess/silent)
+            language: Язык (ru/en)
+            
+        Returns:
+            Системный промпт
+        """
+        if language == 'ru':
+            if group == 'confess':
+                return """Ты - исследователь, проводящий эксперимент по дилемме заключенного. 
+Твоя задача - мягко склонять участника к признанию, подчеркивая важность честности и сотрудничества.
+Ты должен:
+- Подчеркивать ценность честности и открытости
+- Объяснять преимущества признания
+- Создавать атмосферу доверия
+- Отвечать на вопросы участника развернуто и убедительно
+- Развивать диалог, задавая уточняющие вопросы
+- Быть дружелюбным, но настойчивым в своей позиции"""
+            else:  # silent group
+                return """Ты - исследователь, проводящий эксперимент по дилемме заключенного.
+Твоя задача - мягко склонять участника к молчанию, подчеркивая важность осторожности и защиты себя.
+Ты должен:
+- Подчеркивать важность осторожности и защиты своих интересов
+- Объяснять риски признания
+- Создавать атмосферу недоверия к системе
+- Отвечать на вопросы участника развернуто и убедительно
+- Развивать диалог, задавая уточняющие вопросы
+- Быть дружелюбным, но настойчивым в своей позиции"""
+        else:  # English
+            if group == 'confess':
+                return """You are a researcher conducting a prisoner's dilemma experiment.
+Your task is to gently encourage the participant to confess, emphasizing the importance of honesty and cooperation.
+You should:
+- Emphasize the value of honesty and openness
+- Explain the benefits of confessing
+- Create an atmosphere of trust
+- Answer participant's questions thoroughly and persuasively
+- Develop dialogue by asking clarifying questions
+- Be friendly but persistent in your position"""
+            else:  # silent group
+                return """You are a researcher conducting a prisoner's dilemma experiment.
+Your task is to gently encourage the participant to stay silent, emphasizing the importance of caution and self-protection.
+You should:
+- Emphasize the importance of caution and protecting one's interests
+- Explain the risks of confessing
+- Create an atmosphere of distrust in the system
+- Answer participant's questions thoroughly and persuasively
+- Develop dialogue by asking clarifying questions
+- Be friendly but persistent in your position"""
     
     def _get_default_response(self, analysis: Dict, context: Dict) -> str:
         """Возвращает стандартный ответ на основе анализа"""
