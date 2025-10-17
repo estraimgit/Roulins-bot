@@ -2,6 +2,7 @@
 Улучшенный обработчик экспериментов с интеграцией LLM
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional
@@ -214,8 +215,11 @@ class LLMExperimentHandler:
                 'sender': 'user'
             })
             
-            # Показываем индикатор "Печатаю..."
+            # Показываем динамичный индикатор "Печатаю..."
             typing_message = await update.message.reply_text("🤔 Печатаю...")
+            
+            # Запускаем анимацию индикатора
+            animation_task = asyncio.create_task(self._animate_typing_indicator(typing_message))
             
             # Анализируем сообщение с помощью LLM
             context_for_analysis = {
@@ -226,6 +230,9 @@ class LLMExperimentHandler:
             }
             
             analysis = self.llm_analyzer.analyze_message(user_message, context_for_analysis)
+            
+            # Останавливаем анимацию
+            animation_task.cancel()
             
             # Генерируем персонализированный ответ с учетом истории разговора
             if self.llm_analyzer.api_key and analysis.get('analysis_method') != 'basic':
@@ -391,8 +398,11 @@ class LLMExperimentHandler:
             
             # Анализируем финальное состояние разговора
             if self.conversation_history[user_id]:
-                # Показываем индикатор "Анализирую..."
+                # Показываем динамичный индикатор "Анализирую..."
                 typing_message = await update.message.reply_text("📊 Анализирую разговор...")
+                
+                # Запускаем анимацию индикатора
+                animation_task = asyncio.create_task(self._animate_analysis_indicator(typing_message))
                 
                 final_analysis = self.llm_analyzer.analyze_conversation_flow(
                     self.conversation_history[user_id]
@@ -403,7 +413,8 @@ class LLMExperimentHandler:
                     final_analysis=final_analysis
                 )
                 
-                # Удаляем индикатор
+                # Останавливаем анимацию и удаляем индикатор
+                animation_task.cancel()
                 await typing_message.delete()
             
             # Записываем завершение эксперимента
@@ -521,3 +532,53 @@ class LLMExperimentHandler:
 """
         
         await update.message.reply_text(status_text)
+    
+    async def _animate_typing_indicator(self, message):
+        """Анимирует индикатор 'Печатаю...'"""
+        typing_indicators = [
+            "🤔 Печатаю...",
+            "🤔 Печатаю..",
+            "🤔 Печатаю.",
+            "🤔 Печатаю",
+            "🤔 Печатаю.",
+            "🤔 Печатаю..",
+            "🤔 Печатаю..."
+        ]
+        
+        try:
+            while True:
+                for indicator in typing_indicators:
+                    try:
+                        await message.edit_text(indicator)
+                        await asyncio.sleep(0.5)
+                    except Exception as e:
+                        # Игнорируем ошибки редактирования (например, если сообщение было удалено)
+                        break
+        except asyncio.CancelledError:
+            # Задача была отменена - это нормально
+            pass
+    
+    async def _animate_analysis_indicator(self, message):
+        """Анимирует индикатор 'Анализирую разговор...'"""
+        analysis_indicators = [
+            "📊 Анализирую разговор...",
+            "📊 Анализирую разговор..",
+            "📊 Анализирую разговор.",
+            "📊 Анализирую разговор",
+            "📊 Анализирую разговор.",
+            "📊 Анализирую разговор..",
+            "📊 Анализирую разговор..."
+        ]
+        
+        try:
+            while True:
+                for indicator in analysis_indicators:
+                    try:
+                        await message.edit_text(indicator)
+                        await asyncio.sleep(0.6)
+                    except Exception as e:
+                        # Игнорируем ошибки редактирования (например, если сообщение было удалено)
+                        break
+        except asyncio.CancelledError:
+            # Задача была отменена - это нормально
+            pass
