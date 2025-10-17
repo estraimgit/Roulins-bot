@@ -86,46 +86,72 @@ class LLMAnalyzer:
         return prompt
     
     def _call_cloud_ru_api(self, prompt: str) -> Optional[Dict]:
-        """Вызывает API cloud.ru"""
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            data = {
-                "model": self.model,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": Config.LLM_SYSTEM_PROMPT
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                "max_tokens": 500,
-                "temperature": 0.3
-            }
-            
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                return result.get("choices", [{}])[0].get("message", {}).get("content")
-            else:
-                logger.error(f"Ошибка API cloud.ru: {response.status_code} - {response.text}")
-                return None
+        """Вызывает API cloud.ru с retry логикой"""
+        import time
+        
+        max_retries = 3
+        retry_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                }
                 
-        except Exception as e:
-            logger.error(f"Ошибка при вызове cloud.ru API: {e}")
-            return None
+                data = {
+                    "model": self.model,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": Config.LLM_SYSTEM_PROMPT
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    "max_tokens": 500,
+                    "temperature": 0.3
+                }
+                
+                response = requests.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=headers,
+                    json=data,
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    return result.get("choices", [{}])[0].get("message", {}).get("content")
+                elif response.status_code in [503, 502, 504]:  # Временные ошибки сервера
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Временная ошибка API cloud.ru: {response.status_code}, повтор через {retry_delay}с (попытка {attempt + 1}/{max_retries})")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Экспоненциальная задержка
+                        continue
+                    else:
+                        logger.error(f"API cloud.ru недоступен после {max_retries} попыток: {response.status_code} - {response.text}")
+                        return None
+                else:
+                    logger.error(f"Ошибка API cloud.ru: {response.status_code} - {response.text}")
+                    return None
+                    
+            except requests.exceptions.Timeout:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Таймаут API cloud.ru, повтор через {retry_delay}с (попытка {attempt + 1}/{max_retries})")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                else:
+                    logger.error("API cloud.ru недоступен: таймаут")
+                    return None
+            except Exception as e:
+                logger.error(f"Ошибка при вызове cloud.ru API: {e}")
+                return None
+        
+        return None
     
     def _parse_analysis_response(self, response: str) -> Dict:
         """Парсит ответ от LLM"""
@@ -288,9 +314,9 @@ class LLMAnalyzer:
 7. Может быть развернутым (3-5 предложений) для лучшего взаимодействия
 
 Ответ должен быть в формате JSON:
-{
+{{
     "response": "Ваш развернутый ответ здесь"
-}
+}}
 """
             
             response = self._call_cloud_ru_api(prompt)
