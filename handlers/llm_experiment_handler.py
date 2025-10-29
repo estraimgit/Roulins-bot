@@ -525,13 +525,19 @@ class LLMExperimentHandler:
         """Завершает эксперимент по истечении времени"""
         user_id = context.job.data['user_id']
         
+        logger.info(f"Таймер завершения эксперимента сработал для пользователя {user_id}")
+        
         if user_id in self.active_sessions:
             session_data = self.active_sessions[user_id]
+            
+            logger.info(f"Сессия найдена для пользователя {user_id}, показываем финальное решение")
             
             # Показываем сообщение о истечении времени и кнопки для финального решения
             await self._show_final_decision(context.bot, user_id, session_data)
             
             logger.info(f"Эксперимент завершен по таймеру для пользователя {user_id}")
+        else:
+            logger.warning(f"Сессия не найдена для пользователя {user_id} при завершении эксперимента")
 
     async def _end_experiment(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int):
         """Завершает эксперимент"""
@@ -731,6 +737,8 @@ class LLMExperimentHandler:
     async def _show_final_decision(self, bot, user_id: int, session_data: Dict):
         """Показывает финальное решение с кнопками"""
         try:
+            logger.info(f"Показываем финальное решение для пользователя {user_id}")
+            
             if session_data['language'] == 'ru':
                 message_text = (
                     "⏰ **Время эксперимента истекло!**\n\n"
@@ -755,6 +763,8 @@ class LLMExperimentHandler:
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
+            logger.info(f"Отправляем сообщение с кнопками финального решения для пользователя {user_id}")
+            
             await bot.send_message(
                 chat_id=user_id,
                 text=message_text,
@@ -762,8 +772,10 @@ class LLMExperimentHandler:
                 parse_mode='Markdown'
             )
             
+            logger.info(f"Сообщение с кнопками финального решения отправлено для пользователя {user_id}")
+            
         except Exception as e:
-            logger.error(f"Ошибка при показе финального решения: {e}")
+            logger.error(f"Ошибка при показе финального решения для пользователя {user_id}: {e}")
     
     async def handle_final_decision(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает финальное решение пользователя"""

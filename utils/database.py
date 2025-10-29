@@ -337,8 +337,14 @@ class DatabaseManager:
                 ''')
                 decision_distribution = dict(cursor.fetchall())
                 
+                # Количество завершенных экспериментов
+                cursor.execute('SELECT COUNT(*) FROM participants WHERE final_decision IS NOT NULL')
+                completed = cursor.fetchone()[0]
+                
                 return {
                     'total_participants': total_participants,
+                    'completed': completed,
+                    'groups': group_distribution,  # Переименовано для совместимости с админ-панелью
                     'group_distribution': group_distribution,
                     'language_distribution': language_distribution,
                     'decision_distribution': decision_distribution
