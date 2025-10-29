@@ -113,7 +113,7 @@ class LLMExperimentHandler:
                 'group': group,
                 'language': language,
                 'start_time': datetime.now(),
-                'end_time': datetime.now() + timedelta(minutes=5),
+                'end_time': datetime.now() + timedelta(minutes=Config.DISCUSSION_TIME_MINUTES),
                 'message_count': 0,
                 'last_activity': datetime.now(),
                 'conversation_messages': []
