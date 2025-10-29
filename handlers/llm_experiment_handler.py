@@ -272,7 +272,7 @@ class LLMExperimentHandler:
         """Отправляет автоматический первый вопрос участнику"""
         try:
             language = session_data['language']
-            experiment_group = session_data['experiment_group']
+            experiment_group = session_data['group']
             
             # Выбираем тексты в зависимости от группы
             if experiment_group == 'confess':
