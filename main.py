@@ -43,15 +43,18 @@ class PrisonersDilemmaBot:
         self.db = DatabaseManager()
         self.validator = InputValidator()
         
+        self.survey_handler = SurveyHandler(self.db, None)  # Сначала создаем без experiment_handler
+        
         # Выбираем обработчик эксперимента в зависимости от настроек
         if Config.LLM_ENABLED:
             logger.info("Инициализация бота с LLM поддержкой")
-            self.experiment_handler = LLMExperimentHandler()
+            self.experiment_handler = LLMExperimentHandler(self.survey_handler)
         else:
             logger.info("Инициализация бота в базовом режиме")
             self.experiment_handler = ExperimentHandler()
         
-        self.survey_handler = SurveyHandler(self.db, self.experiment_handler)
+        # Устанавливаем experiment_handler в survey_handler
+        self.survey_handler.experiment_handler = self.experiment_handler
         self.admin_handler = AdminHandler()
         
         # Инициализируем активные сессии

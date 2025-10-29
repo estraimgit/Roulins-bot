@@ -24,12 +24,12 @@ logger = logging.getLogger(__name__)
 class LLMExperimentHandler:
     """Обработчик экспериментов с LLM анализом"""
     
-    def __init__(self):
+    def __init__(self, survey_handler=None):
         self.db = DatabaseManager()
         self.randomizer = ParticipantRandomizer()
         self.multilingual = MultilingualManager()
         self.llm_analyzer = LLMAnalyzer()
-        self.survey_handler = SurveyHandler(self.db)
+        self.survey_handler = survey_handler  # Используем переданный экземпляр
         self.admin_handler = AdminHandler()
         # Используем прямые импорты текстов
         self.confess_texts = CONFESS_NUDGING_TEXTS
