@@ -4,6 +4,7 @@
 
 import asyncio
 import logging
+import random
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -233,6 +234,10 @@ class LLMExperimentHandler:
             if message:
                 session_data['timer_message_id'] = message.message_id
             
+            # Отправляем автоматический первый вопрос с небольшой задержкой
+            await asyncio.sleep(2)  # 2 секунды задержки
+            await self._send_opening_question(context, user_id, session_data)
+            
             # Запускаем таймеры (если JobQueue доступен)
             if hasattr(context, 'job_queue') and context.job_queue:
                 # Таймер завершения обсуждения
@@ -262,6 +267,36 @@ class LLMExperimentHandler:
                 await query.edit_message_text("❌ Произошла ошибка при запуске обсуждения.")
             except Exception as e2:
                 logger.warning(f"Не удалось отредактировать сообщение об ошибке: {e2}")
+    
+    async def _send_opening_question(self, context: ContextTypes.DEFAULT_TYPE, user_id: int, session_data: Dict):
+        """Отправляет автоматический первый вопрос участнику"""
+        try:
+            language = session_data['language']
+            experiment_group = session_data['experiment_group']
+            
+            # Выбираем тексты в зависимости от группы
+            if experiment_group == 'confess':
+                texts = CONFESS_NUDGING_TEXTS.get(language, CONFESS_NUDGING_TEXTS['en'])
+            else:
+                texts = SILENT_NUDGING_TEXTS.get(language, SILENT_NUDGING_TEXTS['en'])
+            
+            # Выбираем случайный открывающий вопрос
+            opening_question = random.choice(texts['opening_questions'])
+            
+            # Отправляем вопрос
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=opening_question,
+                parse_mode='Markdown'
+            )
+            
+            # Сохраняем вопрос в базе данных
+            self.db.save_chat_message(session_data['participant_id'], 'bot', opening_question)
+            
+            logger.info(f"Отправлен открывающий вопрос пользователю {user_id}: {opening_question}")
+            
+        except Exception as e:
+            logger.error(f"Ошибка при отправке открывающего вопроса: {e}")
     
     async def _update_time_counter(self, context: ContextTypes.DEFAULT_TYPE):
         """Обновляет счетчик времени в сообщении"""
