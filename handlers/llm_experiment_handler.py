@@ -547,7 +547,14 @@ class LLMExperimentHandler:
             # Анализируем финальное состояние разговора
             if self.conversation_history[user_id]:
                 # Показываем сообщение об анализе
-                typing_message = await update.message.reply_text("Анализирую разговор...")
+                if update and update.message:
+                    typing_message = await update.message.reply_text("Анализирую разговор...")
+                else:
+                    # Если update или message недоступны, отправляем сообщение напрямую
+                    typing_message = await context.bot.send_message(
+                        chat_id=user_id, 
+                        text="Анализирую разговор..."
+                    )
                 
                 final_analysis = self.llm_analyzer.analyze_conversation_flow(
                     self.conversation_history[user_id]
@@ -559,7 +566,10 @@ class LLMExperimentHandler:
                 )
                 
                 # Удаляем сообщение об анализе
-                await typing_message.delete()
+                try:
+                    await typing_message.delete()
+                except Exception as e:
+                    logger.warning(f"Не удалось удалить сообщение об анализе: {e}")
             
             # Записываем завершение эксперимента
             await self.db.log_experiment_completion(
