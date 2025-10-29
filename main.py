@@ -1,5 +1,6 @@
 """
 Основной файл Telegram бота для эксперимента по дилемме заключенного
+Поддерживает как базовый режим, так и режим с LLM интеграцией
 """
 import logging
 import os
@@ -7,7 +8,12 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
 from config.settings import Config
+from utils.validation import InputValidator
 from handlers.experiment_handler import ExperimentHandler
+from handlers.llm_experiment_handler import LLMExperimentHandler
+from handlers.survey_handler import SurveyHandler
+from handlers.admin_handler import AdminHandler
+from utils.database import DatabaseManager
 
 # Настройка логирования
 logging.basicConfig(
@@ -25,133 +31,185 @@ class PrisonersDilemmaBot:
     """Основной класс бота для эксперимента"""
     
     def __init__(self):
-        self.config = Config()
-        self.experiment_handler = ExperimentHandler()
-        
-        # Валидируем конфигурацию
+        # Валидируем конфигурацию при инициализации
         try:
-            self.config.validate()
+            Config.validate()
+            logger.info("Конфигурация валидна")
         except ValueError as e:
             logger.error(f"Ошибка конфигурации: {e}")
             raise
+        
+        self.config = Config()
+        self.db = DatabaseManager()
+        self.validator = InputValidator()
+        
+        # Выбираем обработчик эксперимента в зависимости от настроек
+        if Config.LLM_ENABLED:
+            logger.info("Инициализация бота с LLM поддержкой")
+            self.experiment_handler = LLMExperimentHandler()
+        else:
+            logger.info("Инициализация бота в базовом режиме")
+            self.experiment_handler = ExperimentHandler()
+        
+        self.survey_handler = SurveyHandler(self.db, self.experiment_handler)
+        self.admin_handler = AdminHandler()
+        
+        # Инициализируем активные сессии
+        self.active_sessions = getattr(self.experiment_handler, 'active_sessions', {})
     
     async def start_command(self, update: Update, context):
         """Обработчик команды /start"""
-        await self.experiment_handler.start_experiment(update, context)
+        try:
+            # Валидируем пользователя
+            user_id = update.effective_user.id
+            if not self.validator.validate_user_id(user_id):
+                await update.message.reply_text("❌ Ошибка: неверный ID пользователя")
+                return
+            
+            await self.experiment_handler.start_experiment(update, context)
+        except Exception as e:
+            logger.error(f"Ошибка в команде /start: {e}")
+            await update.message.reply_text("❌ Произошла ошибка при запуске эксперимента")
     
     async def help_command(self, update: Update, context):
         """Обработчик команды /help"""
         help_text = """
-🤖 Бот для эксперимента по дилемме заключенного
+🤖 **Prisoner's Dilemma Experiment Bot**
 
-Доступные команды:
+**Доступные команды:**
 /start - Начать эксперимент
 /help - Показать эту справку
-/status - Показать статистику эксперимента (только для администраторов)
+/status - Показать статус эксперимента
+/admin - Админские команды (только для администраторов)
 
-Этот бот проводит исследование этических решений в контексте дилеммы заключенного.
-Эксперимент займет примерно 5 минут вашего времени.
+**О эксперименте:**
+Это исследование по дилемме заключенного с использованием ИИ для анализа ваших сообщений.
+Эксперимент длится 5 минут, после чего вы получите опрос.
 
-Для начала введите /start
-        """
-        await update.message.reply_text(help_text)
+**Приватность:**
+Все ваши сообщения анонимизированы и используются только для научных целей.
+
+**Тестирование:**
+Администраторы могут проходить эксперимент несколько раз для тестирования.
+"""
+        await update.message.reply_text(help_text, parse_mode='Markdown')
     
     async def status_command(self, update: Update, context):
-        """Обработчик команды /status (только для администраторов)"""
-        # Здесь можно добавить проверку прав администратора
-        user_id = update.effective_user.id
-        
-        # Простая проверка - в реальном проекте используйте более надежную систему
-        admin_ids = [123456789]  # Замените на реальные ID администраторов
-        
-        if user_id not in admin_ids:
-            await update.message.reply_text("У вас нет прав для выполнения этой команды.")
-            return
-        
-        # Получаем статистику
-        stats = self.experiment_handler.db.get_experiment_statistics()
-        
-        status_text = f"""
-📊 Статистика эксперимента:
-
-👥 Всего участников: {stats.get('total_participants', 0)}
-
-📈 Распределение по группам:
-{self._format_group_stats(stats.get('group_distribution', {}))}
-
-🌍 Распределение по языкам:
-{self._format_language_stats(stats.get('language_distribution', {}))}
-
-🎯 Финальные решения:
-{self._format_decision_stats(stats.get('decision_distribution', {}))}
-
-🔄 Активных сессий: {len(self.experiment_handler.active_sessions)}
-        """
-        
-        await update.message.reply_text(status_text)
+        """Обработчик команды /status"""
+        try:
+            if hasattr(self.experiment_handler, 'get_experiment_status'):
+                await self.experiment_handler.get_experiment_status(update, context)
+            else:
+                # Fallback для базового обработчика
+                user_id = update.effective_user.id
+                if user_id in self.active_sessions:
+                    session_data = self.active_sessions[user_id]
+                    status_text = f"""
+📊 Статус эксперимента:
+👤 Группа: {session_data.get('group', 'неизвестно')}
+🌍 Язык: {session_data.get('language', 'неизвестно')}
+💬 Сообщений: {session_data.get('message_count', 0)}
+"""
+                    await update.message.reply_text(status_text)
+                else:
+                    await update.message.reply_text("Вы не участвуете в эксперименте.")
+        except Exception as e:
+            logger.error(f"Ошибка в команде /status: {e}")
+            await update.message.reply_text("❌ Ошибка при получении статуса")
     
-    def _format_group_stats(self, group_dist: dict) -> str:
-        """Форматирует статистику по группам"""
-        if not group_dist:
-            return "Нет данных"
-        
-        result = []
-        for group, count in group_dist.items():
-            group_name = "Признание" if group == "confess" else "Молчание"
-            result.append(f"  {group_name}: {count}")
-        
-        return "\n".join(result)
+    async def admin_command(self, update: Update, context):
+        """Обработчик админских команд"""
+        try:
+            await self.admin_handler.handle_admin_command(update, context)
+        except Exception as e:
+            logger.error(f"Ошибка в админской команде: {e}")
+            await update.message.reply_text("❌ Ошибка при выполнении админской команды")
     
-    def _format_language_stats(self, lang_dist: dict) -> str:
-        """Форматирует статистику по языкам"""
-        if not lang_dist:
-            return "Нет данных"
-        
-        result = []
-        for lang, count in lang_dist.items():
-            lang_name = self.config.SUPPORTED_LANGUAGES.get(lang, lang)
-            result.append(f"  {lang_name}: {count}")
-        
-        return "\n".join(result)
-    
-    def _format_decision_stats(self, decision_dist: dict) -> str:
-        """Форматирует статистику по решениям"""
-        if not decision_dist:
-            return "Нет данных"
-        
-        result = []
-        for decision, count in decision_dist.items():
-            decision_name = "Признание" if decision == "confess" else "Молчание"
-            result.append(f"  {decision_name}: {count}")
-        
-        return "\n".join(result)
     
     async def handle_message(self, update: Update, context):
-        """Обработчик обычных сообщений"""
-        user_id = update.effective_user.id
-        
-        # Проверяем, не находится ли пользователь в процессе опроса
-        if user_id in self.experiment_handler.survey_handler.survey_sessions:
-            survey_data = self.experiment_handler.survey_handler.survey_sessions[user_id]
-            if survey_data.get('waiting_for_text', False):
-                await self.experiment_handler.survey_handler.handle_survey_response(update, context)
+        """Обработчик обычных сообщений с валидацией"""
+        try:
+            user_id = update.effective_user.id
+            message_text = update.message.text
+            
+            # Валидируем сообщение
+            validation_result = self.validator.validate_message(message_text)
+            if not validation_result['is_valid']:
+                logger.warning(f"Невалидное сообщение от пользователя {user_id}: {validation_result['errors']}")
+                await update.message.reply_text("❌ Сообщение содержит недопустимый контент")
                 return
-        
-        # Обычная обработка сообщений эксперимента
-        await self.experiment_handler.handle_user_message(update, context)
+            
+            # Используем санитизированное сообщение
+            sanitized_message = validation_result['sanitized_message']
+            if sanitized_message != message_text:
+                logger.info(f"Сообщение от пользователя {user_id} было санитизировано")
+            
+            # Проверяем, не находится ли пользователь в процессе опроса
+            if user_id in self.survey_handler.survey_sessions:
+                survey_data = self.survey_handler.survey_sessions[user_id]
+                if survey_data.get('waiting_for_text', False):
+                    await self.survey_handler.handle_survey_response(update, context)
+                    return
+            
+            # Проверяем команды завершения эксперимента
+            if sanitized_message.lower() in ['/end', '/finish', '/stop', 'завершить', 'закончить', 'стоп', 'хватит']:
+                if user_id in self.active_sessions:
+                    if hasattr(self.experiment_handler, '_end_experiment'):
+                        await self.experiment_handler._end_experiment(update, context, user_id)
+                    else:
+                        await update.message.reply_text("Эксперимент завершен. Спасибо за участие!")
+                    return
+                else:
+                    await update.message.reply_text("Вы не участвуете в эксперименте. Используйте /start для начала.")
+                    return
+            
+            # Обычная обработка сообщений эксперимента
+            await self.experiment_handler.handle_user_message(update, context)
+            
+        except Exception as e:
+            logger.error(f"Ошибка при обработке сообщения: {e}")
+            await update.message.reply_text("❌ Произошла ошибка при обработке сообщения")
     
     async def handle_callback(self, update: Update, context):
         """Обработчик callback запросов"""
-        query = update.callback_query
-        data = query.data
-        
-        if data.startswith('lang_'):
-            await self.experiment_handler.handle_language_selection(update, context)
-        elif data.startswith('decision_'):
-            await self.experiment_handler.handle_decision(update, context)
-        elif data.startswith('survey_'):
-            # Обрабатываем ответы на опрос
-            await self.experiment_handler.survey_handler.handle_survey_response(update, context)
+        try:
+            query = update.callback_query
+            
+            try:
+                await query.answer()
+            except Exception as e:
+                logger.warning(f"Не удалось ответить на callback query: {e}")
+            
+            data = query.data
+            
+            # Валидируем callback data
+            if not data or len(data) > 100:
+                logger.warning(f"Подозрительный callback data: {data}")
+                await query.edit_message_text("❌ Неверная команда")
+                return
+            
+            if data.startswith('lang_'):
+                await self.experiment_handler.handle_language_selection(update, context)
+            elif data.startswith('start_discussion_'):
+                await self.experiment_handler.handle_start_discussion(update, context)
+            elif data.startswith('end_discussion_'):
+                await self.experiment_handler.handle_end_discussion(update, context)
+            elif data.startswith('survey_'):
+                await self.survey_handler.handle_survey_response(update, context)
+            elif data.startswith('final_decision_'):
+                await self.experiment_handler.handle_final_decision(update, context)
+            elif data.startswith('decision_'):
+                await self.experiment_handler.handle_decision(update, context)
+            else:
+                logger.warning(f"Неизвестный callback data: {data}")
+                await query.edit_message_text("❌ Неизвестная команда")
+                
+        except Exception as e:
+            logger.error(f"Ошибка при обработке callback: {e}")
+            try:
+                await query.edit_message_text("❌ Произошла ошибка при обработке команды")
+            except:
+                pass
     
     def run_polling(self):
         """Запускает бота в режиме polling"""
@@ -164,6 +222,7 @@ class PrisonersDilemmaBot:
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("status", self.status_command))
+        application.add_handler(CommandHandler("admin", self.admin_command))
         application.add_handler(CallbackQueryHandler(self.handle_callback))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         
@@ -181,6 +240,7 @@ class PrisonersDilemmaBot:
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("status", self.status_command))
+        application.add_handler(CommandHandler("admin", self.admin_command))
         application.add_handler(CallbackQueryHandler(self.handle_callback))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         
@@ -199,6 +259,8 @@ class PrisonersDilemmaBot:
 def main():
     """Главная функция"""
     try:
+        logger.info("Запуск Prisoner's Dilemma Bot...")
+        
         # Создаем экземпляр бота
         bot = PrisonersDilemmaBot()
         

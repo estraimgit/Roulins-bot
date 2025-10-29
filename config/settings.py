@@ -19,7 +19,7 @@ class Config:
     DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///data/experiment.db')
     
     # Безопасность
-    ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY', 'default_key_change_in_production')
+    ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
     
     # Эксперимент
     EXPERIMENT_DURATION_MINUTES = int(os.getenv('EXPERIMENT_DURATION_MINUTES', 5))
@@ -69,8 +69,32 @@ class Config:
     @classmethod
     def validate(cls):
         """Проверяет корректность конфигурации"""
+        errors = []
+        
+        # Проверка обязательных параметров
         if not cls.BOT_TOKEN:
-            raise ValueError("BOT_TOKEN не установлен")
-        if len(cls.ENCRYPTION_KEY) < 32:
-            raise ValueError("ENCRYPTION_KEY должен быть не менее 32 символов")
+            errors.append("BOT_TOKEN не установлен")
+        
+        if not cls.ENCRYPTION_KEY:
+            errors.append("ENCRYPTION_KEY не установлен")
+        elif len(cls.ENCRYPTION_KEY) < 32:
+            errors.append("ENCRYPTION_KEY должен быть не менее 32 символов")
+        
+        # Проверка числовых параметров
+        if cls.EXPERIMENT_DURATION_MINUTES <= 0:
+            errors.append("EXPERIMENT_DURATION_MINUTES должен быть больше 0")
+        
+        if cls.TOTAL_PARTICIPANTS <= 0:
+            errors.append("TOTAL_PARTICIPANTS должен быть больше 0")
+        
+        # Проверка webhook настроек
+        if cls.WEBHOOK_URL and not cls.WEBHOOK_URL.startswith('https://'):
+            errors.append("WEBHOOK_URL должен использовать HTTPS")
+        
+        if cls.WEBHOOK_PORT < 1 or cls.WEBHOOK_PORT > 65535:
+            errors.append("WEBHOOK_PORT должен быть в диапазоне 1-65535")
+        
+        if errors:
+            raise ValueError(f"Ошибки конфигурации: {'; '.join(errors)}")
+        
         return True

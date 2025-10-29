@@ -160,8 +160,25 @@ class DatabaseManager:
     
     def create_participant(self, participant_id: str, telegram_user_id: int, 
                           language: str, experiment_group: str) -> bool:
-        """Создает нового участника"""
+        """Создает нового участника с валидацией"""
         try:
+            # Валидация входных данных
+            if not participant_id or not isinstance(participant_id, str):
+                logger.error("Неверный participant_id")
+                return False
+            
+            if not isinstance(telegram_user_id, int) or telegram_user_id <= 0:
+                logger.error("Неверный telegram_user_id")
+                return False
+            
+            if language not in ['en', 'ru', 'es', 'fr', 'de', 'zh', 'ja', 'ar']:
+                logger.error(f"Неподдерживаемый язык: {language}")
+                return False
+            
+            if experiment_group not in ['confess', 'silent']:
+                logger.error(f"Неверная группа эксперимента: {experiment_group}")
+                return False
+            
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
@@ -171,8 +188,8 @@ class DatabaseManager:
                 conn.commit()
                 logger.info(f"Участник {participant_id} создан")
                 return True
-        except sqlite3.IntegrityError:
-            logger.warning(f"Участник {participant_id} уже существует")
+        except sqlite3.IntegrityError as e:
+            logger.warning(f"Участник {participant_id} уже существует: {e}")
             return False
         except Exception as e:
             logger.error(f"Ошибка создания участника: {e}")

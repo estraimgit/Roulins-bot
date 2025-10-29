@@ -8,6 +8,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from utils.database import DatabaseManager
+from utils.validation import InputValidator
 from config.nudging_texts import COMMON_TEXTS
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ class SurveyHandler:
     def __init__(self, db_manager: DatabaseManager, experiment_handler=None):
         self.db = db_manager
         self.experiment_handler = experiment_handler
+        self.validator = InputValidator()
         self.survey_sessions: Dict[int, Dict[str, Any]] = {}
     
     async def start_survey(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
@@ -190,12 +192,22 @@ class SurveyHandler:
         
         logger.info(f"Завершаем опрос для участника {participant_id}, ответы: {responses}")
         
+        # Валидируем ответы опроса
+        validation_result = self.validator.validate_survey_response(responses)
+        if not validation_result['is_valid']:
+            logger.error(f"Невалидные ответы опроса: {validation_result['errors']}")
+            await update.callback_query.edit_message_text("❌ Ошибка: неверные ответы на опрос")
+            return
+        
+        # Используем санитизированные ответы
+        sanitized_responses = validation_result['sanitized_response']
+        
         # Подготавливаем данные для сохранения
         survey_responses = {
-            'question_1': responses.get('question_1'),
-            'question_2': responses.get('question_2'),
-            'question_3': int(responses.get('question_3', 0)) if responses.get('question_3') else None,
-            'question_4': responses.get('question_4', '')
+            'question_1': sanitized_responses.get('question_1'),
+            'question_2': sanitized_responses.get('question_2'),
+            'question_3': sanitized_responses.get('question_3'),
+            'question_4': sanitized_responses.get('question_4', '')
         }
         
         # Сохраняем в базу данных
