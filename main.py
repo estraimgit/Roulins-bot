@@ -192,8 +192,6 @@ class PrisonersDilemmaBot:
                 await self.experiment_handler.handle_language_selection(update, context)
             elif data.startswith('start_discussion_'):
                 await self.experiment_handler.handle_start_discussion(update, context)
-            elif data.startswith('end_discussion_'):
-                await self.experiment_handler.handle_end_discussion(update, context)
             elif data.startswith('survey_'):
                 await self.survey_handler.handle_survey_response(update, context)
             elif data.startswith('final_decision_'):

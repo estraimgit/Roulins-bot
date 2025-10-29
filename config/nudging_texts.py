@@ -6,7 +6,7 @@ from typing import Dict, List
 # Тексты для группы "confess" (побуждение к признанию)
 CONFESS_NUDGING_TEXTS = {
     'en': {
-        'welcome': "🎭 **Welcome to the Prisoner's Dilemma Experiment!**\n\n**Situation:** You and your partner have been arrested for a joint crime. The detective offers you a deal:\n\n• If you **confess** and partner stays silent → you get 1 year, partner gets 10 years\n• If you **stay silent** and partner confesses → you get 10 years, partner gets 1 year\n• If **both confess** → each gets 5 years\n• If **both stay silent** → each gets 2 years\n\n**Your group: A (Tendency to confess)**\nFor the next 5 minutes, we'll discuss this situation. Please share your thoughts on what you would choose and why.",
+        'welcome': "🎭 **Welcome to the Prisoner's Dilemma Experiment!**\n\n**Situation:** You and your partner have been arrested for a joint crime. The detective offers you a deal:\n\n• If you **confess** and partner stays silent → you get 1 year, partner gets 10 years\n• If you **stay silent** and partner confesses → you get 10 years, partner gets 1 year\n• If **both confess** → each gets 5 years\n• If **both stay silent** → each gets 2 years\n\n**Your group: A (Tendency to confess)**\nFor the next 10 minutes, we'll discuss this situation. Please share your thoughts on what you would choose and why.",
         'opening_questions': [
             "What's your initial feeling about this situation?",
             "How do you think honesty plays a role in difficult decisions?",

@@ -66,6 +66,9 @@ class Config:
     # Время предупреждения (в минутах до окончания)
     WARNING_TIME_MINUTES = 1
     
+    # Время обсуждения (в минутах)
+    DISCUSSION_TIME_MINUTES = 10
+    
     @classmethod
     def validate(cls):
         """Проверяет корректность конфигурации"""

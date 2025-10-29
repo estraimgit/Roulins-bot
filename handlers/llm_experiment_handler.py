@@ -199,29 +199,26 @@ class LLMExperimentHandler:
         try:
             # Обновляем время начала обсуждения
             session_data['discussion_start_time'] = datetime.now()
-            session_data['discussion_end_time'] = datetime.now() + timedelta(minutes=5)
+            session_data['discussion_end_time'] = datetime.now() + timedelta(minutes=Config.DISCUSSION_TIME_MINUTES)
             
             # Отправляем сообщение о начале обсуждения
             if language == 'ru':
                 discussion_text = (
                     "🎯 **Обсуждение началось!**\n\n"
-                    "Теперь у вас есть 5 минут, чтобы поделиться своими мыслями о дилемме заключенного. "
+                    "Теперь у вас есть 10 минут, чтобы поделиться своими мыслями о дилемме заключенного. "
                     "Расскажите, что бы вы выбрали и почему.\n\n"
-                    "⏰ **Время:** 5:00"
+                    "⏰ **Время:** 10:00"
                 )
-                end_button_text = "🏁 Завершить обсуждение"
             else:
                 discussion_text = (
                     "🎯 **Discussion Started!**\n\n"
-                    "You now have 5 minutes to share your thoughts about the prisoner's dilemma. "
+                    "You now have 10 minutes to share your thoughts about the prisoner's dilemma. "
                     "Tell us what you would choose and why.\n\n"
-                    "⏰ **Time:** 5:00"
+                    "⏰ **Time:** 10:00"
                 )
-                end_button_text = "🏁 End Discussion"
             
-            # Создаем кнопку "Завершить обсуждение"
-            keyboard = [[InlineKeyboardButton(end_button_text, callback_data=f"end_discussion_{user_id}")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            # Убираем кнопку "Завершить обсуждение" - участники должны ждать окончания времени
+            reply_markup = None
             
             message = await query.edit_message_text(
                 discussion_text,
@@ -238,7 +235,7 @@ class LLMExperimentHandler:
                 # Таймер завершения обсуждения
                 context.job_queue.run_once(
                     self._end_experiment_timer, 
-                    300,  # 5 минут
+                    600,  # 10 минут
                     data={'user_id': user_id},
                     name=f"_end_experiment_timer_{user_id}"
                 )
@@ -263,75 +260,6 @@ class LLMExperimentHandler:
             except Exception as e2:
                 logger.warning(f"Не удалось отредактировать сообщение об ошибке: {e2}")
     
-    async def handle_end_discussion(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает нажатие кнопки 'Завершить обсуждение'"""
-        query = update.callback_query
-        
-        try:
-            await query.answer()
-        except Exception as e:
-            logger.warning(f"Не удалось ответить на callback query: {e}")
-        
-        user_id = query.from_user.id
-        
-        if user_id not in self.active_sessions:
-            try:
-                await query.edit_message_text("❌ Сессия не найдена.")
-            except Exception as e:
-                logger.warning(f"Не удалось отредактировать сообщение: {e}")
-            return
-        
-        session_data = self.active_sessions[user_id]
-        language = session_data['language']
-        
-        try:
-            # Показываем сообщение об окончании обсуждения
-            if language == 'ru':
-                end_text = (
-                    "🏁 **Обсуждение завершено!**\n\n"
-                    "Спасибо за ваши размышления. Теперь пришло время принять финальное решение.\n\n"
-                    "Выберите ваш окончательный выбор:"
-                )
-                confess_text = "🔓 Признаться"
-                silent_text = "🔒 Молчать"
-            else:
-                end_text = (
-                    "🏁 **Discussion Ended!**\n\n"
-                    "Thank you for your thoughts. Now it's time to make your final decision.\n\n"
-                    "Choose your final choice:"
-                )
-                confess_text = "🔓 Confess"
-                silent_text = "🔒 Stay Silent"
-            
-            # Создаем кнопки для финального решения
-            keyboard = [
-                [InlineKeyboardButton(confess_text, callback_data=f"final_decision_confess_{user_id}")],
-                [InlineKeyboardButton(silent_text, callback_data=f"final_decision_silent_{user_id}")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await query.edit_message_text(
-                end_text,
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
-            
-            # Отменяем все активные таймеры для этого пользователя
-            if hasattr(context, 'job_queue') and context.job_queue:
-                # Отменяем таймер завершения эксперимента
-                for job in context.job_queue.jobs():
-                    if hasattr(job, 'data') and job.data and job.data.get('user_id') == user_id:
-                        job.schedule_removal()
-                
-                logger.info(f"Таймеры отменены для пользователя {user_id}")
-                
-        except Exception as e:
-            logger.error(f"Ошибка при завершении обсуждения: {e}")
-            try:
-                await query.edit_message_text("❌ Произошла ошибка при завершении обсуждения.")
-            except Exception as e2:
-                logger.warning(f"Не удалось отредактировать сообщение об ошибке: {e2}")
-    
     async def _update_time_counter(self, context: ContextTypes.DEFAULT_TYPE):
         """Обновляет счетчик времени в сообщении"""
         user_id = context.job.data['user_id']
@@ -347,7 +275,7 @@ class LLMExperimentHandler:
         try:
             # Вычисляем оставшееся время
             elapsed = datetime.now() - session_data['discussion_start_time']
-            remaining = timedelta(minutes=5) - elapsed
+            remaining = timedelta(minutes=Config.DISCUSSION_TIME_MINUTES) - elapsed
             
             if remaining.total_seconds() <= 0:
                 # Время истекло, завершаем обсуждение
@@ -363,23 +291,20 @@ class LLMExperimentHandler:
             if session_data['language'] == 'ru':
                 discussion_text = (
                     "🎯 **Обсуждение началось!**\n\n"
-                    "Теперь у вас есть 5 минут, чтобы поделиться своими мыслями о дилемме заключенного. "
+                    "Теперь у вас есть 10 минут, чтобы поделиться своими мыслями о дилемме заключенного. "
                     "Расскажите, что бы вы выбрали и почему.\n\n"
                     f"⏰ **Время:** {time_str}"
                 )
-                end_button_text = "🏁 Завершить обсуждение"
             else:
                 discussion_text = (
                     "🎯 **Discussion Started!**\n\n"
-                    "You now have 5 minutes to share your thoughts about the prisoner's dilemma. "
+                    "You now have 10 minutes to share your thoughts about the prisoner's dilemma. "
                     "Tell us what you would choose and why.\n\n"
                     f"⏰ **Time:** {time_str}"
                 )
-                end_button_text = "🏁 End Discussion"
             
-            # Создаем кнопку "Завершить обсуждение"
-            keyboard = [[InlineKeyboardButton(end_button_text, callback_data=f"end_discussion_{user_id}")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            # Убираем кнопку "Завершить обсуждение" - участники должны ждать окончания времени
+            reply_markup = None
             
             # Пытаемся обновить сообщение
             try:
@@ -530,7 +455,7 @@ class LLMExperimentHandler:
             session_data = self.active_sessions[user_id]
             start_time = session_data['start_time']
             elapsed = (datetime.now() - start_time).total_seconds()
-            remaining = max(0, 300 - elapsed)  # 5 минут = 300 секунд
+            remaining = max(0, 600 - elapsed)  # 10 минут = 600 секунд
             
             if remaining > 0:
                 minutes = int(remaining // 60)
@@ -629,7 +554,7 @@ class LLMExperimentHandler:
                 "🔓 **Только вы признаетесь** → вы свободны, партнер 5 лет\n"
                 "🔒 **Только вы молчите** → вы 5 лет, партнер свободен\n\n"
                 "**🎯 Ваша задача:**\n"
-                "Обдумайте ситуацию и примите решение. У вас будет 5 минут на размышления.\n\n"
+                "Обдумайте ситуацию и примите решение. У вас будет 10 минут на размышления.\n\n"
                 "Готовы начать? Нажмите кнопку ниже!"
             )
         else:
@@ -645,7 +570,7 @@ class LLMExperimentHandler:
                 "🔓 **Only you confess** → you go free, partner gets 5 years\n"
                 "🔒 **Only you stay silent** → you get 5 years, partner goes free\n\n"
                 "**🎯 Your Task:**\n"
-                "Think about the situation and make your decision. You have 5 minutes to consider.\n\n"
+                "Think about the situation and make your decision. You have 10 minutes to consider.\n\n"
                 "Ready to start? Click the button below!"
             )
     
