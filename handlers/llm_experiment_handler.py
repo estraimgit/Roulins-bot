@@ -188,7 +188,10 @@ class LLMExperimentHandler:
         
         if user_id not in self.active_sessions:
             try:
-                await query.edit_message_text("❌ Сессия не найдена.")
+                if query and hasattr(query, 'edit_message_text'):
+                    await query.edit_message_text("❌ Сессия не найдена.")
+                else:
+                    await context.bot.send_message(chat_id=user_id, text="❌ Сессия не найдена.")
             except Exception as e:
                 logger.warning(f"Не удалось отредактировать сообщение: {e}")
             return
@@ -731,6 +734,10 @@ class LLMExperimentHandler:
         """Обрабатывает финальное решение пользователя"""
         query = update.callback_query
         
+        if not query:
+            logger.error("Callback query is None in handle_final_decision")
+            return
+        
         try:
             await query.answer()
         except Exception as e:
@@ -752,7 +759,10 @@ class LLMExperimentHandler:
         
         if user_id not in self.active_sessions:
             try:
-                await query.edit_message_text("❌ Сессия не найдена.")
+                if query and hasattr(query, 'edit_message_text'):
+                    await query.edit_message_text("❌ Сессия не найдена.")
+                else:
+                    await context.bot.send_message(chat_id=user_id, text="❌ Сессия не найдена.")
             except Exception as e:
                 logger.warning(f"Не удалось отредактировать сообщение: {e}")
             return
@@ -827,7 +837,11 @@ class LLMExperimentHandler:
                 )
             
             try:
-                await query.edit_message_text(thank_you_text, parse_mode='Markdown')
+                if query and hasattr(query, 'edit_message_text'):
+                    await query.edit_message_text(thank_you_text, parse_mode='Markdown')
+                else:
+                    # Если query недоступен, отправляем новое сообщение
+                    await context.bot.send_message(chat_id=user_id, text=thank_you_text, parse_mode='Markdown')
             except Exception as e:
                 logger.warning(f"Не удалось отредактировать сообщение с благодарностью: {e}")
                 # Отправляем новое сообщение если не удалось отредактировать
@@ -855,7 +869,10 @@ class LLMExperimentHandler:
         except Exception as e:
             logger.error(f"Ошибка при обработке финального решения: {e}")
             try:
-                await query.edit_message_text("❌ Произошла ошибка. Попробуйте еще раз.")
+                if query and hasattr(query, 'edit_message_text'):
+                    await query.edit_message_text("❌ Произошла ошибка. Попробуйте еще раз.")
+                else:
+                    await context.bot.send_message(chat_id=user_id, text="❌ Произошла ошибка. Попробуйте еще раз.")
             except Exception as e2:
                 logger.warning(f"Не удалось отредактировать сообщение об ошибке: {e2}")
                 # Отправляем новое сообщение если не удалось отредактировать
